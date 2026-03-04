@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """
-SIDPlayer C64-Style
+SIDPlayer C64-Style con supporto copertine C64 da IGDB e RAWG
+Versione: v2.2 (SID Metadata Enhanced)
+Autore: ezrad & IA
+Anno: 2026
 """
 
 import os
@@ -10,18 +13,18 @@ import sys
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from pathlib import Path
-from PIL import Image, ImageTk  # Per gestire le immagini
+from PIL import Image, ImageTk
 
-# Prova a importare requests per RAWG API
+# Prova a importare requests per le API
 try:
     import requests
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
-    print("ATTENZIONE: 'requests' non installato. Il supporto RAWG.io è disabilitato.")
+    print("ATTENZIONE: 'requests' non installato. Il supporto API è disabilitato.")
     print("Installa con: pip install requests")
 
-VERSION = "v1.9"
+VERSION = "v2.2"
 PLAYLIST_FILE = "playlist.txt"
 SIDPLAY_CMD = "sidplayfp"
 FONT_FAMILY = "C64 Pro Mono"
@@ -36,27 +39,44 @@ C64_PALETTE = {
 
 class RAWGGameImages:
     def __init__(self, api_key, images_dir):
-        """Inizializza il client RAWG.io"""
+        """Inizializza il client RAWG.io con filtro per Commodore 64"""
         self.api_key = api_key
         self.base_url = "https://api.rawg.io/api"
         self.images_dir = Path(images_dir)
+        self.c64_platform_id = 15  # ID specifico per Commodore 64 su RAWG
         
-    def clean_game_name(self, sid_filename):
-        """Pulisce il nome del file SID per la ricerca su RAWG"""
-        # Rimuovi l'estensione .sid
-        name = sid_filename.replace('.sid', '').replace('.SID', '')
-        # Sostituisci underscore con spazi
-        name = name.replace('_', ' ')
-        # Rimuovi parentesi e numeri alla fine (es. "Game (1984)" -> "Game")
+    def clean_game_name(self, game_name):
+        """Pulisce il nome del gioco per la ricerca su RAWG"""
         import re
-        name = re.sub(r'\s*\(\d{4}\)\s*$', '', name)
-        name = re.sub(r'\s*\d{4}\s*$', '', name)
-        # Rimuovi eventuali indici come "01", "02" alla fine
-        name = re.sub(r'\s*\d{2}\s*$', '', name)
-        return name.strip()
+        
+        # Se viene passato un nome file, rimuovi estensione e path
+        if game_name.lower().endswith('.sid'):
+            game_name = game_name[:-4]
+        
+        # Sostituisci underscore con spazi
+        game_name = game_name.replace('_', ' ')
+        
+        # Rimuovi pattern comuni nei titoli SID
+        patterns = [
+            r'\s*\(\d{4}\)\s*$',        # (1984)
+            r'\s*\d{4}\s*$',            # 1984
+            r'\s*\[.*?\]\s*$',          # [V1]
+            r'\s*\(.*?version.*?\)\s*$', # (demo version)
+            r'\s*(remix|version|demo|beta|alpha|unreleased)\s*$',
+            r'\s*\d{2}\s*$',            # 01, 02
+            r'\s*(c64|commodore|sid)\s*$',  # game c64
+        ]
+        
+        for pattern in patterns:
+            game_name = re.sub(pattern, '', game_name, flags=re.IGNORECASE)
+        
+        # Rimuovi spazi multipli e spazi iniziali/finali
+        game_name = re.sub(r'\s+', ' ', game_name).strip()
+        
+        return game_name
     
-    def search_game(self, game_name):
-        """Cerca un gioco per nome su RAWG.io"""
+    def search_game_c64_only(self, game_name):
+        """Cerca UNICAMENTE giochi per Commodore 64 su RAWG.io"""
         if not HAS_REQUESTS:
             return None
             
@@ -64,52 +84,74 @@ class RAWGGameImages:
         params = {
             'key': self.api_key,
             'search': game_name,
-            'page_size': 1
+            'platforms': self.c64_platform_id,  # FILTRO CRITICO: solo C64
+            'page_size': 5,
+            'ordering': '-rating'
         }
         
         try:
             response = requests.get(endpoint, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
+            
             if data['results']:
+                # Filtra ulteriormente: solo giochi che hanno C64 come piattaforma
+                for game in data['results']:
+                    platform_ids = [p['platform']['id'] for p in game['platforms']]
+                    if self.c64_platform_id in platform_ids:
+                        if game.get('background_image'):
+                            return game
                 return data['results'][0]
             return None
         except Exception as e:
             print(f"Errore ricerca RAWG per '{game_name}': {e}")
             return None
     
-    def download_game_image(self, sid_filename):
+    def download_game_image(self, game_name, sid_filename=None):
         """
-        Scarica l'immagine del gioco corrispondente al file SID.
+        Scarica l'immagine del gioco corrispondente al titolo.
         Ritorna il percorso del file scaricato o None.
         """
         if not HAS_REQUESTS:
             return None
             
-        game_name_clean = self.clean_game_name(sid_filename)
-        print(f"Ricerca su RAWG per: {game_name_clean}")
-        game = self.search_game(game_name_clean)
+        game_name_clean = self.clean_game_name(game_name)
+        print(f"Ricerca su RAWG (solo C64) per: '{game_name_clean}' (da: '{game_name}')")
+        game = self.search_game_c64_only(game_name_clean)
         
         if not game:
-            print(f"Gioco non trovato su RAWG: {game_name_clean}")
+            print(f"Gioco C64 non trovato su RAWG: {game_name_clean}")
             return None
         
-        # Prendi l'URL dell'immagine di sfondo o del primo screenshot
+        # VERIFICA: controlla che sia veramente per C64
+        platform_names = [p['platform']['name'] for p in game['platforms']]
+        c64_platforms = ['Commodore / Amiga', 'Commodore 64', 'C64']
+        has_c64 = any(c64 in str(p) for c64 in c64_platforms for p in platform_names)
+        
+        if not has_c64:
+            print(f"AVVISO: Gioco {game['name']} non è per C64. Piattaforme: {platform_names}")
+            return None
+        
+        # Prendi l'URL dell'immagine di sfondo
         image_url = None
         if game.get('background_image'):
             image_url = game['background_image']
-            print(f"Trovata background_image per {game['name']}")
-        elif game.get('short_screenshots') and len(game['short_screenshots']) > 0:
-            # Prendi il primo screenshot
-            image_url = game['short_screenshots'][0]['image']
-            print(f"Trovato screenshot per {game['name']}")
+            print(f"Trovata immagine per {game['name']} (C64 confermato)")
         
         if not image_url:
             print(f"Nessuna immagine disponibile per {game['name']}")
             return None
         
-        # Crea il nome del file di output (stesso nome del SID ma con estensione .jpg)
-        output_filename = sid_filename.replace('.sid', '.jpg').replace('.SID', '.jpg')
+        # Crea il nome del file di output basato sul nome del gioco (sicuro per filesystem)
+        safe_game_name = "".join(c for c in game['name'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        if not safe_game_name:
+            # Fallback al nome del file SID se necessario
+            if sid_filename:
+                safe_game_name = sid_filename.replace('.sid', '').replace('.SID', '')
+            else:
+                safe_game_name = game_name_clean
+        
+        output_filename = f"{safe_game_name}.jpg"
         output_path = self.images_dir / output_filename
         
         # Se il file esiste già, restituisci il percorso
@@ -119,7 +161,7 @@ class RAWGGameImages:
         
         # Scarica l'immagine
         try:
-            print(f"Download immagine da: {image_url}")
+            print(f"Download immagine da: {image_url[:80]}...")
             response = requests.get(image_url, timeout=15)
             response.raise_for_status()
             
@@ -129,27 +171,220 @@ class RAWGGameImages:
             with open(output_path, 'wb') as f:
                 f.write(response.content)
                 
-            print(f"Immagine scaricata e salvata in: {output_path}")
+            print(f"Immagine C64 scaricata e salvata in: {output_path}")
             return str(output_path)
         except Exception as e:
             print(f"Errore download immagine per {game['name']}: {e}")
-            # Rimuovi il file se il download è fallito
+            if output_path.exists():
+                output_path.unlink()
+            return None
+
+class IGDBGameImages:
+    def __init__(self, client_id, access_token, images_dir):
+        """Inizializza il client IGDB per copertine C64"""
+        self.client_id = client_id
+        self.access_token = access_token
+        self.base_url = "https://api.igdb.com/v4"
+        self.images_dir = Path(images_dir)
+        self.c64_platform_id = 15  # CORRETTO: ID 15 per Commodore 64
+        
+    def clean_game_name(self, game_name):
+        """Pulisce il nome del gioco per la ricerca su IGDB"""
+        import re
+        
+        # Se viene passato un nome file, rimuovi estensione e path
+        if game_name.lower().endswith('.sid'):
+            game_name = game_name[:-4]
+        
+        # Sostituisci underscore con spazi
+        game_name = game_name.replace('_', ' ')
+        
+        # Rimuove annotazioni comuni nei titoli SID
+        patterns = [
+            r'\s*\(\d{4}\)\s*$',        # (1984)
+            r'\s*\d{4}\s*$',            # 1984
+            r'\s*\[.*?\]\s*$',          # [V1]
+            r'\s*\(.*?version.*?\)\s*$', # (demo version)
+            r'\s*(remix|version|demo|beta|alpha|unreleased)\s*$',
+            r'\s*\d{2}\s*$',            # 01, 02
+            r'\s*(c64|commodore|sid)\s*$',  # game c64
+            r'\s*-\s*.*$',              # - Remix, - Theme, etc.
+        ]
+        
+        for pattern in patterns:
+            game_name = re.sub(pattern, '', game_name, flags=re.IGNORECASE)
+        
+        # Rimuovi spazi multipli e spazi iniziali/finali
+        game_name = re.sub(r'\s+', ' ', game_name).strip()
+        
+        return game_name
+    
+    def search_game_c64_only(self, game_name):
+        """Cerca giochi per nome su IGDB e filtra solo quelli per C64"""
+        if not HAS_REQUESTS:
+            return None
+            
+        endpoint = f"{self.base_url}/games"
+        headers = {
+            'Client-ID': self.client_id,
+            'Authorization': f'Bearer {self.access_token}',
+            'Accept': 'application/json'
+        }
+        
+        # Query IGDB: cerca per nome e ottiene cover e piattaforme
+        body = f"""
+        fields name, cover.*, platforms.*;
+        search "{game_name}";
+        limit 10;
+        """
+        
+        try:
+            print(f"Invio richiesta a IGDB per: '{game_name}'")
+            response = requests.post(endpoint, headers=headers, data=body, timeout=15)
+            
+            # Gestione errori
+            if response.status_code == 401:
+                print("ERRORE 401: Access Token IGDB non valido o scaduto!")
+                return None
+            elif response.status_code == 403:
+                print("ERRORE 403: Client ID non autorizzato")
+                return None
+            elif response.status_code != 200:
+                print(f"ERRORE IGDB {response.status_code}: {response.text}")
+                return None
+            
+            response.raise_for_status()
+            games = response.json()
+            print(f"IGDB: trovati {len(games)} giochi totali")
+            
+            if games:
+                # Filtra i giochi che hanno la piattaforma C64 (id 15)
+                c64_games = []
+                for game in games:
+                    if 'platforms' in game:
+                        # Controlla se c'è una piattaforma con id 15
+                        platform_ids = []
+                        for platform in game['platforms']:
+                            if isinstance(platform, dict) and 'id' in platform:
+                                platform_ids.append(platform['id'])
+                            elif isinstance(platform, int):
+                                platform_ids.append(platform)
+                        
+                        if self.c64_platform_id in platform_ids:
+                            c64_games.append(game)
+                
+                print(f"IGDB: {len(c64_games)} giochi per C64")
+                
+                # Preferisci giochi con copertina
+                for game in c64_games:
+                    if 'cover' in game:
+                        print(f"✓ Trovata copertina C64 per: {game.get('name', 'N/A')}")
+                        return game
+                
+                # Se nessuno ha copertina, restituisci il primo gioco C64
+                if c64_games:
+                    print(f"⚠️  Nessuna copertina, uso primo gioco C64: {c64_games[0].get('name', 'N/A')}")
+                    return c64_games[0]
+                else:
+                    print("Nessun gioco C64 trovato")
+                    return None
+            else:
+                print(f"IGDB: nessun gioco trovato per '{game_name}'")
+                return None
+                
+        except requests.exceptions.Timeout:
+            print(f"Timeout nella richiesta IGDB per '{game_name}'")
+            return None
+        except Exception as e:
+            print(f"Errore ricerca IGDB per '{game_name}': {type(e).__name__} - {e}")
+            return None
+    
+    def get_cover_url(self, cover_data):
+        """Costruisce l'URL della copertina da IGDB"""
+        if not cover_data:
+            return None
+            
+        if isinstance(cover_data, int):
+            image_id = cover_data
+        elif isinstance(cover_data, dict) and 'image_id' in cover_data:
+            image_id = cover_data['image_id']
+        else:
+            return None
+        
+        # Formato cover_big per copertine di buona qualità
+        return f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg"
+    
+    def download_game_image(self, game_name, sid_filename=None):
+        """
+        Scarica la COPERTINA del gioco C64 da IGDB.
+        Ritorna il percorso del file scaricato o None.
+        """
+        if not HAS_REQUESTS:
+            return None
+            
+        game_name_clean = self.clean_game_name(game_name)
+        print(f"Ricerca copertina su IGDB (solo C64) per: '{game_name_clean}' (da: '{game_name}')")
+        game = self.search_game_c64_only(game_name_clean)
+        
+        if not game:
+            print(f"Gioco C64 non trovato su IGDB: {game_name_clean}")
+            return None
+        
+        if 'cover' not in game:
+            print(f"Gioco {game.get('name', 'N/A')} non ha copertina su IGDB")
+            return None
+        
+        # Ottieni URL della copertina
+        cover_url = self.get_cover_url(game['cover'])
+        if not cover_url:
+            print(f"Impossibile ottenere URL copertina per {game.get('name', 'N/A')}")
+            return None
+        
+        print(f"Trovata copertina C64 per: {game.get('name', 'N/A')}")
+        
+        # Crea il nome del file di output basato sul nome del gioco
+        safe_game_name = "".join(c for c in game.get('name', game_name_clean) 
+                                if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        output_filename = f"{safe_game_name}_COVER.jpg"
+        output_path = self.images_dir / output_filename
+        
+        # Se il file esiste già, restituisci il percorso
+        if output_path.exists():
+            print(f"Copertina già presente in cache: {output_path}")
+            return str(output_path)
+        
+        # Scarica la copertina
+        try:
+            print(f"Download copertina da: {cover_url}")
+            response = requests.get(cover_url, timeout=15)
+            response.raise_for_status()
+            
+            # Assicurati che la directory esista
+            self.images_dir.mkdir(exist_ok=True)
+            
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+                
+            print(f"Copertina C64 scaricata e salvata in: {output_path}")
+            return str(output_path)
+        except Exception as e:
+            print(f"Errore download copertina: {e}")
             if output_path.exists():
                 output_path.unlink()
             return None
 
 class SidTkPlayer:
-    def __init__(self, master, rawg_api_key=None):
+    def __init__(self, master, rawg_api_key=None, igdb_client_id=None, igdb_access_token=None):
         self.master = master
         self.master.title(f"SIDPLAYER C64 {VERSION}")
         self.master.configure(bg=C64_PALETTE["BLACK"])
         self.master.geometry("640x480")
         self.master.resizable(False, False)
         
-        # Determina la directory dell'eseguibile Python (dove si trova lo script)
+        # Determina la directory dell'eseguibile Python
         self.executable_dir = os.path.dirname(os.path.abspath(__file__))
         
-        # Directory per le immagini (sotto la directory dell'eseguibile)
+        # Directory per le immagini
         self.images_dir = os.path.join(self.executable_dir, "images")
         
         # API RAWG
@@ -157,10 +392,17 @@ class SidTkPlayer:
         self.rawg_fetcher = None
         if rawg_api_key and HAS_REQUESTS:
             self.rawg_fetcher = RAWGGameImages(rawg_api_key, self.images_dir)
-            print("Supporto RAWG.io attivato")
-        elif rawg_api_key and not HAS_REQUESTS:
-            print("ATTENZIONE: api_key RAWG fornita ma 'requests' non installato.")
-            print("Installa con: pip install requests")
+            print("Supporto RAWG.io attivato (solo C64) - basato su metadata SID")
+        
+        # API IGDB (raccomandato per copertine)
+        self.igdb_client_id = igdb_client_id
+        self.igdb_access_token = igdb_access_token
+        self.igdb_fetcher = None
+        if igdb_client_id and igdb_access_token and HAS_REQUESTS:
+            self.igdb_fetcher = IGDBGameImages(igdb_client_id, igdb_access_token, self.images_dir)
+            print("Supporto IGDB attivato (copertine C64) - basato su metadata SID")
+        
+        print("Priorità ricerca immagini: IGDB → RAWG → Locale (tramite metadata SID)")
         
         self.canvas = tk.Canvas(master, width=640, height=480, bg=C64_PALETTE["BLACK"], highlightthickness=0)
         self.canvas.pack()
@@ -173,23 +415,23 @@ class SidTkPlayer:
         tk.Label(header_frame, text="SIDPLAYER", font=(FONT_FAMILY, 18, "bold"),
                 fg=C64_PALETTE["WHITE"], bg=C64_PALETTE["BLUE"]).place(x=20, y=6)
         
-        # Schermo centrale - Ridotto per fare spazio all'immagine
+        # Schermo centrale
         self.screen_frame = tk.Frame(self.canvas, bg=C64_PALETTE["DARK_GREY"], relief="raised", bd=2)
-        self.screen_frame.place(x=24, y=48, width=592, height=100)  # RIDOTTO A 100
+        self.screen_frame.place(x=24, y=48, width=592, height=100)
         
         self.label_title = tk.Label(self.screen_frame, text="LOAD & PLAY",
-            font=(FONT_FAMILY, 18, "bold"), fg=C64_PALETTE["LIGHT_GREEN"],  # RIDOTTO A 18
+            font=(FONT_FAMILY, 18, "bold"), fg=C64_PALETTE["LIGHT_GREEN"],
             bg=C64_PALETTE["DARK_GREY"], wraplength=560, justify="center")
-        self.label_title.place(x=16, y=10)  # Y RIDOTTA
+        self.label_title.place(x=16, y=10)
         
         self.label_subtitle = tk.Label(self.screen_frame, text="Click LOAD then PLAY",
-            font=(FONT_FAMILY, 10), fg=C64_PALETTE["CYAN"],  # RIDOTTO A 10
+            font=(FONT_FAMILY, 10), fg=C64_PALETTE["CYAN"],
             bg=C64_PALETTE["DARK_GREY"], wraplength=560, justify="center")
-        self.label_subtitle.place(x=16, y=50)  # Y RIDOTTA
+        self.label_subtitle.place(x=16, y=50)
         
-        # Frame per l'immagine del videogioco - Ingrandito
+        # Frame per l'immagine del videogioco
         self.image_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"], relief="flat", bd=0)
-        self.image_frame.place(x=24, y=160, width=592, height=200)  # Y=160 (prima era 210), HEIGHT=200 (prima era 160)
+        self.image_frame.place(x=24, y=160, width=592, height=200)
         
         # Frame interno per l'immagine
         self.image_container = tk.Frame(self.image_frame, bg=C64_PALETTE["BLACK"])
@@ -198,7 +440,7 @@ class SidTkPlayer:
         self.image_label = tk.Label(self.image_container, bg=C64_PALETTE["BLACK"])
         self.image_label.pack(expand=True)
         
-        # Label per la fonte dell'immagine (in basso nel frame immagine)
+        # Label per la fonte dell'immagine
         self.image_source_label = tk.Label(self.image_frame, 
                                           text="",
                                           font=(FONT_FAMILY, 8),
@@ -206,14 +448,14 @@ class SidTkPlayer:
                                           bg=C64_PALETTE["BLACK"])
         self.image_source_label.pack(side='bottom', pady=(0, 5))
         
-        # Status bar semplice
+        # Status bar
         self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=32)
         self.status_frame.place(x=0, y=416, width=640)
         self.status_label = tk.Label(self.status_frame, text="READY. TO PLAY.",
             font=(FONT_FAMILY, 14, "bold"), fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
         self.status_label.place(x=10, y=6)
         
-        # Pulsanti GRANDI e CHIARI
+        # Pulsanti
         btn_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"])
         btn_frame.place(x=24, y=384, width=592, height=32)
         
@@ -223,20 +465,18 @@ class SidTkPlayer:
             ("PLAY", self.start_playlist),
             ("NEXT", self.skip_track),
             ("STOP", self.stop_playlist),
-            ("ABOUT", self.show_about),  # NUOVO PULSANTE
+            ("ABOUT", self.show_about),
             ("QUIT", self.quit_all)
         ]
         
-        # Usa grid per avere pulsanti di uguale dimensione con testo centrato
         for i, (text, cmd) in enumerate(button_config):
             btn = tk.Button(btn_frame, text=text, command=cmd, font=(FONT_FAMILY, 14, "bold"),
                 fg=C64_PALETTE["BLACK"], bg=C64_PALETTE["LIGHT_BLUE"],
                 activebackground=C64_PALETTE["CYAN"], activeforeground=C64_PALETTE["WHITE"],
-                relief="raised", bd=4, padx=5, pady=6, width=10, anchor="center")  # anchor="center" per centrare il testo
+                relief="raised", bd=4, padx=5, pady=6, width=10, anchor="center")
             btn.grid(row=0, column=i, sticky="nsew", padx=2)
             self.buttons.append(btn)
         
-        # Configura tutte le colonne per avere peso uguale (pulsanti di uguale larghezza)
         for i in range(len(button_config)):
             btn_frame.columnconfigure(i, weight=1)
         
@@ -258,20 +498,16 @@ class SidTkPlayer:
         """Legge il titolo dall'header del file SID"""
         try:
             with open(sid_path, 'rb') as f:
-                # Legge i primi 4 byte per identificare il formato
                 header = f.read(4)
                 if header not in [b'PSID', b'RSID']:
                     return os.path.basename(sid_path).replace(".sid", "").replace("_", " ")
                 
-                # Il titolo si trova all'offset 0x16 (22 in decimale) e occupa 32 byte
                 f.seek(0x16)
                 title_bytes = f.read(32)
                 
-                # Rimuove byte nulli e decodifica
                 title = title_bytes.split(b'\x00')[0]
                 title_text = title.decode('latin-1').strip()
                 
-                # Se il titolo è vuoto o contiene solo spazi, usa il nome del file
                 if not title_text or title_text.isspace():
                     return os.path.basename(sid_path).replace(".sid", "").replace("_", " ")
                 return title_text
@@ -283,20 +519,16 @@ class SidTkPlayer:
         """Legge l'autore dall'header del file SID"""
         try:
             with open(sid_path, 'rb') as f:
-                # Legge i primi 4 byte per identificare il formato
                 header = f.read(4)
                 if header not in [b'PSID', b'RSID']:
                     return "Unknown Author"
                 
-                # L'autore si trova all'offset 0x36 (54 in decimale) e occupa 32 byte
                 f.seek(0x36)
                 author_bytes = f.read(32)
                 
-                # Rimuove byte nulli e decodifica
                 author = author_bytes.split(b'\x00')[0]
                 author_text = author.decode('latin-1').strip()
                 
-                # Se l'autore è vuoto o contiene solo spazi, ritorna "Unknown Author"
                 if not author_text or author_text.isspace():
                     return "Unknown Author"
                 return author_text
@@ -304,6 +536,27 @@ class SidTkPlayer:
             print(f"Error reading SID author from {sid_path}: {e}")
             return "Unknown Author"
 
+    def get_sid_released(self, sid_path):
+        """Legge il campo 'Released/Copyright' dall'header del file SID"""
+        try:
+            with open(sid_path, 'rb') as f:
+                header = f.read(4)
+                if header not in [b'PSID', b'RSID']:
+                    return ""
+                
+                f.seek(0x56)
+                released_bytes = f.read(32)
+                
+                released = released_bytes.split(b'\x00')[0]
+                released_text = released.decode('latin-1').strip()
+                
+                if not released_text or released_text.isspace():
+                    return ""
+                return released_text
+        except Exception as e:
+            print(f"Error reading SID released from {sid_path}: {e}")
+            return ""
+    
     def blink_title(self):
         current_fg = self.label_title.cget("fg")
         self.label_title.config(fg=C64_PALETTE["YELLOW"])
@@ -346,52 +599,54 @@ class SidTkPlayer:
         self.total_tracks = len(self.tracks)
         return bool(self.tracks)
     
-    def find_game_image(self, sid_path):
+    def find_game_image(self, sid_path, sid_title):
         """
-        Cerca un'immagine con lo stesso nome del file SID.
-        Prima cerca in locale, poi su RAWG.io se abilitato.
+        Cerca un'immagine per il gioco in base al TITOLO SID (non nome file).
+        Priorità: 1. IGDB (copertine), 2. RAWG (filtrato C64), 3. Locale
         Ritorna (percorso_immagine, fonte)
         """
-        # Prendi solo il nome del file senza estensione e percorso
         file_name = os.path.basename(sid_path)
-        base_name = os.path.splitext(file_name)[0]
         
-        # Cerca nella directory images dell'eseguibile
+        # Crea un nome sicuro per il file dal titolo SID
+        safe_title = "".join(c for c in sid_title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        if not safe_title:
+            safe_title = file_name.replace('.sid', '').replace('.SID', '')
+        
+        # Cerca nella directory images locale
         if not os.path.exists(self.images_dir):
             os.makedirs(self.images_dir, exist_ok=True)
         
         image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
         
+        # 1. Cerca in locale per titolo (safe_title)
         for ext in image_extensions:
-            # Prova prima con l'estensione normale
-            image_path = os.path.join(self.images_dir, base_name + ext)
+            # Cerca per titolo
+            image_path = os.path.join(self.images_dir, safe_title + ext)
             if os.path.exists(image_path):
-                print(f"Immagine trovata localmente: {image_path}")
-                return image_path, "Local file"
+                print(f"Immagine trovata localmente per titolo '{sid_title}': {image_path}")
+                return image_path, "Local file (by SID title)"
             
-            # Prova anche con l'estensione in maiusculo
-            image_path = os.path.join(self.images_dir, base_name + ext.upper())
+            # Cerca anche varianti con _COVER
+            image_path = os.path.join(self.images_dir, safe_title + '_COVER' + ext)
             if os.path.exists(image_path):
-                print(f"Immagine trovata localmente: {image_path}")
-                return image_path, "Local file"
+                print(f"Copertina trovata localmente per titolo '{sid_title}': {image_path}")
+                return image_path, "Local file (cover by SID title)"
         
-        # Se non trova con il nome esatto, prova varianti (senza underscore, con spazi, etc.)
-        clean_name = base_name.replace("_", " ")
-        for ext in image_extensions:
-            image_path = os.path.join(self.images_dir, clean_name + ext)
-            if os.path.exists(image_path):
-                print(f"Immagine trovata localmente (nome pulito): {image_path}")
-                return image_path, "Local file"
-        
-        # Se non trovato localmente e abbiamo un fetcher RAWG, proviamo a scaricare
-        if self.rawg_fetcher:
-            print(f"Immagine non trovata localmente per {file_name}, provo con RAWG.io...")
-            downloaded_path = self.rawg_fetcher.download_game_image(file_name)
+        # 2. Cerca su IGDB per copertine usando il TITOLO SID
+        if self.igdb_fetcher:
+            print(f"Provo IGDB per copertina C64 con titolo SID: '{sid_title}'")
+            downloaded_path = self.igdb_fetcher.download_game_image(sid_title, file_name)
             if downloaded_path:
-                print(f"Immagine scaricata con successo da RAWG: {downloaded_path}")
-                return downloaded_path, "RAWG.io"
+                return downloaded_path, "IGDB (Cover C64 by SID title)"
         
-        print(f"Nessuna immagine trovata per {file_name}")
+        # 3. Cerca su RAWG filtrato per C64 usando il TITOLO SID
+        if self.rawg_fetcher:
+            print(f"Provo RAWG filtrato per C64 con titolo SID: '{sid_title}'")
+            downloaded_path = self.rawg_fetcher.download_game_image(sid_title, file_name)
+            if downloaded_path:
+                return downloaded_path, "RAWG.io (C64 filtered by SID title)"
+        
+        print(f"Nessuna immagine trovata per il titolo SID: '{sid_title}'")
         return None, None
     
     def load_and_display_image(self, image_path, source):
@@ -407,10 +662,9 @@ class SidTkPlayer:
             img = Image.open(image_path)
             
             # Ridimensiona mantenendo le proporzioni
-            max_width = 580  # Larghezza massima
-            max_height = 170  # Aumentato a 170 per lo spazio maggiore
+            max_width = 580
+            max_height = 170
             
-            # Calcola le nuove dimensioni mantenendo le proporzioni
             width_ratio = max_width / img.width
             height_ratio = max_height / img.height
             ratio = min(width_ratio, height_ratio)
@@ -507,27 +761,31 @@ class SidTkPlayer:
             self.master.after(2000, self.play_next_track)
             return
 
-        # Leggi titolo e autore dal file SID
+        # Leggi titolo, autore e copyright dal file SID
         title = self.get_sid_title(track_path)
         author = self.get_sid_author(track_path)
+        released = self.get_sid_released(track_path)
         
         self.label_title.config(text=title, fg=C64_PALETTE["LIGHT_GREEN"])
-        self.label_subtitle.config(text=f"by {author}", fg=C64_PALETTE["CYAN"])
+        
+        # Mostra autore e copyright (se disponibile)
+        if released:
+            self.label_subtitle.config(text=f"by {author} - {released}", fg=C64_PALETTE["CYAN"])
+        else:
+            self.label_subtitle.config(text=f"by {author}", fg=C64_PALETTE["CYAN"])
+            
         self.blink_title()
         self.update_status()
 
-        # Cerca e mostra l'immagine del videogioco
-        image_path, image_source = self.find_game_image(track_path)
+        # Cerca e mostra l'immagine del videogioco usando il TITOLO SID (non il nome del file)
+        image_path, image_source = self.find_game_image(track_path, title)
         if image_path:
             self.load_and_display_image(image_path, image_source)
         else:
-            # Mostra il percorso in cui cerca per aiutare il debug
-            file_name = os.path.basename(track_path)
-            if file_name.lower().endswith(".sid"):
-                file_name = file_name[:-4]
-            status_text = "[Image not found]"
-            if self.rawg_fetcher:
-                status_text += f"\nRAWG.io search enabled"
+            # Mostra che non è stata trovata un'immagine per il titolo SID
+            status_text = f"[No image found for SID title: {title}]"
+            if self.igdb_fetcher or self.rawg_fetcher:
+                status_text += f"\nC64 search enabled (by SID metadata)"
             self.image_label.config(text=status_text, 
                                   font=(FONT_FAMILY, 8),
                                   fg=C64_PALETTE["GREY"],
@@ -600,11 +858,19 @@ class SidTkPlayer:
         
         # Descrizione
         desc_label = tk.Label(about_window, 
-                             text="C64 SID Music Player\nwith RAWG.io game images support",
+                             text="C64 SID Music Player v2.2\nwith C64 cover art support\nImages searched by SID metadata",
                              font=(FONT_FAMILY, 10),
                              fg=C64_PALETTE["LIGHT_GREY"],
                              bg=C64_PALETTE["BLACK"])
         desc_label.pack(pady=(20, 10))
+        
+        # Info metadata
+        info_label = tk.Label(about_window, 
+                             text="Uses SID header metadata:\n- Title (for image search)\n- Author\n- Released/Copyright",
+                             font=(FONT_FAMILY, 8),
+                             fg=C64_PALETTE["GREY"],
+                             bg=C64_PALETTE["BLACK"])
+        info_label.pack(pady=(10, 5))
         
         # Pulsante di chiusura
         close_btn = tk.Button(about_window, text="CLOSE", 
@@ -657,10 +923,8 @@ def main():
     
     root = tk.Tk()
     
-    # Leggi API key da variabile d'ambiente (opzionale)
+    # Leggi API key RAWG
     rawg_api_key = os.environ.get('RAWG_API_KEY')
-    
-    # Se non trovata nella variabile d'ambiente, prova a leggere da un file
     if not rawg_api_key:
         api_key_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rawg_api_key.txt")
         if os.path.exists(api_key_file):
@@ -670,16 +934,47 @@ def main():
             except:
                 pass
     
-    if rawg_api_key:
-        print(f"API Key RAWG trovata: {rawg_api_key[:10]}...")
-    else:
-        print("API Key RAWG non trovata. Il supporto RAWG.io è disabilitato.")
-        print("Per abilitarlo:")
-        print("1. Ottieni una API key da https://rawg.io/apidocs")
-        print("2. Imposta la variabile d'ambiente RAWG_API_KEY o")
-        print("3. Crea un file 'rawg_api_key.txt' nella directory dello script")
+    # Leggi credenziali IGDB (RACCOMANDATO)
+    igdb_client_id = os.environ.get('IGDB_CLIENT_ID')
+    igdb_access_token = os.environ.get('IGDB_ACCESS_TOKEN')
     
-    app = SidTkPlayer(root, rawg_api_key=rawg_api_key)
+    if not igdb_client_id or not igdb_access_token:
+        igdb_cred_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "igdb_credentials.txt")
+        if os.path.exists(igdb_cred_file):
+            try:
+                with open(igdb_cred_file, 'r') as f:
+                    lines = f.read().strip().splitlines()
+                    if len(lines) >= 2:
+                        igdb_client_id = lines[0].strip()
+                        igdb_access_token = lines[1].strip()
+            except:
+                pass
+    
+    # Messaggi informativi
+    if rawg_api_key:
+        print(f"API Key RAWG trovata - Ricerche basate su metadata SID")
+    else:
+        print("API Key RAWG non trovata. RAWG disabilitato.")
+    
+    if igdb_client_id and igdb_access_token:
+        print(f"Credenziali IGDB trovate - Copertine C64 abilitate!")
+        print(f"Ricerche basate su titolo SID dai metadati")
+    else:
+        print("Credenziali IGDB non trovate. Per copertine accurate:")
+        print("1. Vai su https://api-docs.igdb.com/#authentication")
+        print("2. Ottieni Client ID e Access Token")
+        print("3. Salva in 'igdb_credentials.txt' (2 righe)")
+    
+    print("\n=== IMPORTANTE ===")
+    print("Questa versione (v2.2) utilizza i metadati SID per le ricerche:")
+    print("- Titolo, Autore e Copyright letti dall'header SID")
+    print("- Ricerche immagini basate sul titolo SID (non sul nome del file)")
+    print("=================\n")
+    
+    app = SidTkPlayer(root, 
+                     rawg_api_key=rawg_api_key,
+                     igdb_client_id=igdb_client_id,
+                     igdb_access_token=igdb_access_token)
     root.mainloop()
 
 if __name__ == "__main__":
