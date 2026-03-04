@@ -1,0 +1,39 @@
+# SIDPlayer Configuration File
+# ==========================================
+# Copia questo file in sidplayer.cfg e modifica i valori
+
+[paths]
+# Directory dove salvare le immagini dei giochi
+# Default: ~/Pictures/SIDPlayer
+images_dir = ~/Pictures/SIDPlayer
+
+# File della playlist (percorso assoluto o relativo)
+playlist_file = playlist.txt
+
+[api]
+# API Key per RAWG.io (opzionale)
+# Ottieni una key da: https://rawg.io/apidocs
+rawg_api_key = 
+
+# IGDB Client ID (opzionale, per le copertine)
+# Ottieni da: https://dev.twitch.tv/console/apps
+igdb_client_id = 
+
+# IGDB Access Token (opzionale)
+# Genera un token OAuth dall'interfaccia Twitch
+igdb_access_token = 
+
+[player]
+# Comando per riprodurre i file SID
+sidplay_cmd = sidplayfp
+
+# Famiglia del font per l'interfaccia
+font_family = C64 Pro Mono
+
+[window]
+# Dimensioni della finestra
+width = 640
+height = 480
+
+# La finestra è ridimensionabile? (true/false)
+resizable = false

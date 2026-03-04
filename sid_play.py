@@ -21,11 +21,13 @@ except ImportError:
     print("ATTENZIONE: 'requests' non installato. Il supporto RAWG.io è disabilitato.")
     print("Installa con: pip install requests")
 
+VERSION = "v1.9"
 PLAYLIST_FILE = "playlist.txt"
 SIDPLAY_CMD = "sidplayfp"
 FONT_FAMILY = "C64 Pro Mono"
 
 C64_PALETTE = {
+    "EZ_LBLUE": "#8B8FF7", "EZ_BLUE": "#383BF0", "EZ_DBLUE": "#3134D2",
     "BLACK": "#000000", "WHITE": "#FFFFFF", "RED": "#880000", "CYAN": "#AAFFEE",
     "PURPLE": "#CC44CC", "GREEN": "#00CC55", "BLUE": "#0000AA", "YELLOW": "#EEEE77",
     "ORANGE": "#DD8855", "BROWN": "#664400", "PINK": "#FF7777", "DARK_GREY": "#333333",
@@ -139,7 +141,7 @@ class RAWGGameImages:
 class SidTkPlayer:
     def __init__(self, master, rawg_api_key=None):
         self.master = master
-        self.master.title("SIDPLAYER C64 v1.8")
+        self.master.title(f"SIDPLAYER C64 {VERSION}")
         self.master.configure(bg=C64_PALETTE["BLACK"])
         self.master.geometry("640x480")
         self.master.resizable(False, False)
@@ -175,12 +177,12 @@ class SidTkPlayer:
         self.screen_frame = tk.Frame(self.canvas, bg=C64_PALETTE["DARK_GREY"], relief="raised", bd=2)
         self.screen_frame.place(x=24, y=48, width=592, height=100)  # RIDOTTO A 100
         
-        self.label_title = tk.Label(self.screen_frame, text="LOAD FILES & PLAY",
+        self.label_title = tk.Label(self.screen_frame, text="LOAD & PLAY",
             font=(FONT_FAMILY, 18, "bold"), fg=C64_PALETTE["LIGHT_GREEN"],  # RIDOTTO A 18
             bg=C64_PALETTE["DARK_GREY"], wraplength=560, justify="center")
         self.label_title.place(x=16, y=10)  # Y RIDOTTA
         
-        self.label_subtitle = tk.Label(self.screen_frame, text="Click LOAD FILES then PLAY LIST",
+        self.label_subtitle = tk.Label(self.screen_frame, text="Click LOAD then PLAY",
             font=(FONT_FAMILY, 10), fg=C64_PALETTE["CYAN"],  # RIDOTTO A 10
             bg=C64_PALETTE["DARK_GREY"], wraplength=560, justify="center")
         self.label_subtitle.place(x=16, y=50)  # Y RIDOTTA
@@ -205,10 +207,10 @@ class SidTkPlayer:
         self.image_source_label.pack(side='bottom', pady=(0, 5))
         
         # Status bar semplice
-        self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BROWN"], height=32)
+        self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=32)
         self.status_frame.place(x=0, y=416, width=640)
-        self.status_label = tk.Label(self.status_frame, text="READY - CLICK LOAD FILES THEN PLAY LIST",
-            font=(FONT_FAMILY, 14, "bold"), fg=C64_PALETTE["YELLOW"], bg=C64_PALETTE["BROWN"])
+        self.status_label = tk.Label(self.status_frame, text="READY. TO PLAY.",
+            font=(FONT_FAMILY, 14, "bold"), fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
         self.status_label.place(x=10, y=6)
         
         # Pulsanti GRANDI e CHIARI
@@ -225,15 +227,18 @@ class SidTkPlayer:
             ("QUIT", self.quit_all)
         ]
         
-        # Calcola la larghezza dei pulsanti (592 pixel totali / 6 pulsanti = ~98 pixel)
-        btn_width = 98
+        # Usa grid per avere pulsanti di uguale dimensione con testo centrato
         for i, (text, cmd) in enumerate(button_config):
             btn = tk.Button(btn_frame, text=text, command=cmd, font=(FONT_FAMILY, 14, "bold"),
                 fg=C64_PALETTE["BLACK"], bg=C64_PALETTE["LIGHT_BLUE"],
                 activebackground=C64_PALETTE["CYAN"], activeforeground=C64_PALETTE["WHITE"],
-                relief="raised", bd=4, padx=15, pady=6)  # padx ridotto per far spazio
-            btn.place(x=i*btn_width+2, y=2)
+                relief="raised", bd=4, padx=5, pady=6, width=10, anchor="center")  # anchor="center" per centrare il testo
+            btn.grid(row=0, column=i, sticky="nsew", padx=2)
             self.buttons.append(btn)
+        
+        # Configura tutte le colonne per avere peso uguale (pulsanti di uguale larghezza)
+        for i in range(len(button_config)):
+            btn_frame.columnconfigure(i, weight=1)
         
         # Stato
         self.tracks = []
@@ -311,7 +316,7 @@ class SidTkPlayer:
         elif self.total_tracks > 0:
             self.status_label.config(text=f"{self.total_tracks} files loaded - READY")
         else:
-            self.status_label.config(text="READY - CLICK LOAD FILES THEN PLAY LIST")
+            self.status_label.config(text="READY - CLICK LOAD THEN PLAY")
     
     def load_files_dialog(self):
         files = filedialog.askopenfilenames(
@@ -321,7 +326,7 @@ class SidTkPlayer:
         if files:
             self.tracks = list(files)
             self.total_tracks = len(self.tracks)
-            self.label_subtitle.config(text=f"{self.total_tracks} files loaded - Click PLAY LIST")
+            self.label_subtitle.config(text=f"{self.total_tracks} files loaded - Click PLAY")
             self.blink_title()
             self.update_status()
     
@@ -364,7 +369,7 @@ class SidTkPlayer:
                 print(f"Immagine trovata localmente: {image_path}")
                 return image_path, "Local file"
             
-            # Prova anche con l'estensione in maiuscolo
+            # Prova anche con l'estensione in maiusculo
             image_path = os.path.join(self.images_dir, base_name + ext.upper())
             if os.path.exists(image_path):
                 print(f"Immagine trovata localmente: {image_path}")
@@ -440,7 +445,7 @@ class SidTkPlayer:
             if self.load_playlist_file():
                 self.label_subtitle.config(text=f"{self.total_tracks} files from playlist.txt")
             else:
-                self.label_subtitle.config(text="No files found! Click LOAD FILES first", fg=C64_PALETTE["RED"])
+                self.label_subtitle.config(text="No files found! Click LOAD first", fg=C64_PALETTE["RED"])
                 return
         
         if not self.tracks:
@@ -573,14 +578,14 @@ class SidTkPlayer:
         title_label.pack(pady=(30, 10))
         
         # Versione
-        version_label = tk.Label(about_window, text="Version 1.8", 
+        version_label = tk.Label(about_window, text=VERSION, 
                                font=(FONT_FAMILY, 14),
                                fg=C64_PALETTE["CYAN"],
                                bg=C64_PALETTE["BLACK"])
         version_label.pack(pady=(0, 10))
         
         # Autore
-        author_label = tk.Label(about_window, text="Author: ezrad + IA", 
+        author_label = tk.Label(about_window, text="Author: ezrad & IA", 
                                font=(FONT_FAMILY, 12),
                                fg=C64_PALETTE["WHITE"],
                                bg=C64_PALETTE["BLACK"])
@@ -607,7 +612,7 @@ class SidTkPlayer:
                              font=(FONT_FAMILY, 12, "bold"),
                              fg=C64_PALETTE["BLACK"],
                              bg=C64_PALETTE["LIGHT_BLUE"],
-                             padx=20, pady=5)
+                             padx=20, pady=5, anchor="center")
         close_btn.pack(pady=(20, 0))
         
         # Centra la finestra
