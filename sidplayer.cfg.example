@@ -27,8 +27,8 @@ igdb_access_token =
 # Comando per riprodurre i file SID
 sidplay_cmd = sidplayfp
 
-# Famiglia del font per l'interfaccia
-font_family = C64 Pro Mono
+# Nota: Il font "C64 Pro Mono" viene usato se installato nel sistema
+# Altrimenti viene usato un font di fallback (Courier)
 
 [window]
 # Dimensioni della finestra
