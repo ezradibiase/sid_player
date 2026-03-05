@@ -1,1 +1,8 @@
-images
+images/
+build/
+dist/
+SIDPlayer.app/
+SIDPlayer_StandAlone.app/
+SIDPlayer_v2.2_Mac
+.DS_Store
+SIDPlayer_v2.2_Mac.zip

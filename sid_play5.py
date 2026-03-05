@@ -16,6 +16,21 @@ from pathlib import Path
 from PIL import Image, ImageTk
 import configparser
 
+# Configura logging su file
+LOG_FILE = "sidplayer_debug.log"
+
+def log_message(msg):
+    """Scrive un messaggio nel file di log"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        log_path = os.path.join(script_dir, LOG_FILE)
+        with open(log_path, "a", encoding="utf-8") as f:
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            f.write(f"[{timestamp}] {msg}\n")
+    except:
+        pass
+
 # Nota: L'icona del dock viene gestita dall'app bundle macOS (Info.plist)
 # Non è necessario impostarla via codice Python
 
@@ -27,9 +42,11 @@ except ImportError:
     HAS_REQUESTS = False
     print("ATTENZIONE: 'requests' non installato. Il supporto API è disabilitato.")
     print("Installa con: pip install requests")
+    log_message("ATTENZIONE: 'requests' non installato")
 
 VERSION = "v2.2"
-FONT_FAMILY_DEFAULT = "C64 Pro Mono"
+FONT_FAMILY_DEFAULT = "C64 Pro Mono"  # Nome del font se installato
+FONT_FALLBACK = "Courier"  # Font di fallback se C64 Pro Mono non è presente
 CONFIG_FILE = "sidplayer.cfg"
 
 C64_PALETTE = {
@@ -41,9 +58,23 @@ C64_PALETTE = {
 }
 
 
+def get_available_font(preferred_font, fallback_font):
+    """
+    Verifica se il font preferito è disponibile nel sistema.
+    Se non lo è, usa il font di fallback.
+    """
+    try:
+        # Prova a creare un font con il nome preferito
+        test_font = (preferred_font, 12)
+        # Se tkinter non lancia eccezioni, il font è disponibile
+        return preferred_font
+    except:
+        return fallback_font
+
+
 class Config:
     """Gestisce la configurazione dell'applicazione"""
-    
+
     DEFAULTS = {
         'paths': {
             'images_dir': '~/Pictures/SIDPlayer',
@@ -56,7 +87,6 @@ class Config:
         },
         'player': {
             'sidplay_cmd': 'sidplayfp',
-            'font_family': 'C64 Pro Mono',
         },
         'window': {
             'width': '640',
@@ -64,12 +94,43 @@ class Config:
             'resizable': 'false',
         }
     }
-    
+
     def __init__(self, config_file=CONFIG_FILE):
         self.config_file = config_file
         self.config = configparser.ConfigParser()
+        
+        # Se il percorso è relativo, cerca in queste posizioni (in ordine):
+        # 1. Directory dell'utente (~/Library/Application Support/SIDPlayer/)
+        # 2. Directory home (~)
+        # 3. Directory dello script (per app bundle o sviluppo)
+        if not os.path.isabs(self.config_file):
+            # Percorsi preferiti per la configurazione utente
+            user_config_dir = os.path.expanduser("~/Library/Application Support/SIDPlayer")
+            user_config_path = os.path.join(user_config_dir, self.config_file)
+            home_config_path = os.path.expanduser(f"~/{self.config_file}")
+            
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            script_config_path = os.path.join(script_dir, self.config_file)
+            
+            # Cerca il file di configurazione in ordine di priorità
+            if os.path.exists(user_config_path):
+                self.config_file = user_config_path
+                log_message(f"Config trovata in: {self.config_file} (user)")
+            elif os.path.exists(home_config_path):
+                self.config_file = home_config_path
+                log_message(f"Config trovata in: {self.config_file} (home)")
+            else:
+                self.config_file = script_config_path
+                log_message(f"Config trovata in: {self.config_file} (script)")
+        
         self._load_config()
-    
+        # Determina il font disponibile nel sistema
+        self._font_family = get_available_font(FONT_FAMILY_DEFAULT, FONT_FALLBACK)
+        if self._font_family == FONT_FALLBACK:
+            log_message(f"Font '{FONT_FAMILY_DEFAULT}' non trovato. Uso '{FONT_FALLBACK}'")
+        else:
+            log_message(f"Font '{FONT_FAMILY_DEFAULT}' disponibile")
+
     def _load_config(self):
         """Carica la configurazione dal file o usa i default"""
         # Imposta i default
@@ -111,7 +172,12 @@ class Config:
     @property
     def playlist_file(self):
         """Ottiene il percorso del file playlist"""
-        return self.get('paths', 'playlist_file')
+        path = self.get('paths', 'playlist_file')
+        # Se il percorso è relativo, lo cerca nella directory dello script
+        if not os.path.isabs(path):
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(script_dir, path)
+        return os.path.expanduser(os.path.expandvars(path))
     
     @property
     def rawg_api_key(self):
@@ -132,11 +198,11 @@ class Config:
     def sidplay_cmd(self):
         """Ottiene il comando per riprodurre i SID"""
         return self.get('player', 'sidplay_cmd')
-    
+
     @property
     def font_family(self):
-        """Ottiene la famiglia del font"""
-        return self.get('player', 'font_family')
+        """Ottiene la famiglia del font (rilevata dal sistema)"""
+        return self._font_family
     
     @property
     def window_width(self):
@@ -589,16 +655,16 @@ class SidTkPlayer:
                                           bg=C64_PALETTE["BLACK"])
         self.image_source_label.pack(side='bottom', pady=(0, 5))
 
-        # Status bar
+        # Status bar (spostata più in basso)
         self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=32)
-        self.status_frame.place(x=0, y=self.config.window_height - 64, width=self.config.window_width)
+        self.status_frame.place(x=0, y=448, width=self.config.window_width)
         self.status_label = tk.Label(self.status_frame, text="READY. TO PLAY.",
             font=(self.font_family, 14, "bold"), fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
         self.status_label.place(x=10, y=6)
 
-        # Pulsanti
+        # Pulsanti (spostati più in basso, sopra la status bar)
         btn_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"])
-        btn_frame.place(x=24, y=self.config.window_height - 32, width=592, height=32)
+        btn_frame.place(x=24, y=416, width=592, height=32)
 
         self.buttons = []
         button_config = [
@@ -628,12 +694,16 @@ class SidTkPlayer:
         self.playing = False
         self.total_tracks = 0
         self.current_image = None
-        
+
         # Verifica se la directory images esiste
         if not os.path.exists(self.images_dir):
             print(f"AVVISO: Directory immagini non trovata: {self.images_dir}")
             print("Creo la directory 'images'...")
             os.makedirs(self.images_dir, exist_ok=True)
+
+        # Carica automaticamente la playlist se esiste
+        self.load_playlist_file()
+        self.update_status()
 
     def get_sid_title(self, sid_path):
         """Legge il titolo dall'header del file SID"""
@@ -713,32 +783,169 @@ class SidTkPlayer:
             self.status_label.config(text="READY - CLICK LOAD THEN PLAY")
     
     def load_files_dialog(self):
+        """Mostra un menu per scegliere cosa caricare: file SID o playlist"""
+        # Crea un dialog per chiedere cosa caricare
+        dialog = tk.Toplevel(self.master)
+        dialog.title("LOAD")
+        dialog.configure(bg=C64_PALETTE["BLACK"])
+        dialog.geometry("350x180")
+        dialog.resizable(False, False)
+        dialog.transient(self.master)
+        dialog.grab_set()
+        
+        # Titolo
+        title_label = tk.Label(dialog, text="Cosa vuoi caricare?",
+                              font=(self.font_family, 14, "bold"),
+                              fg=C64_PALETTE["LIGHT_GREEN"],
+                              bg=C64_PALETTE["BLACK"])
+        title_label.pack(pady=(20, 15))
+        
+        # Frame per i bottoni
+        btn_frame = tk.Frame(dialog, bg=C64_PALETTE["BLACK"])
+        btn_frame.pack(pady=(0, 20))
+        
+        def on_sid_files():
+            dialog.destroy()
+            self._load_sid_files()
+        
+        def on_playlist():
+            dialog.destroy()
+            self._load_playlist_dialog()
+        
+        # Pulsante SID Files
+        btn_sid = tk.Button(btn_frame, text="SID FILES",
+                           command=on_sid_files,
+                           font=(self.font_family, 12, "bold"),
+                           fg=C64_PALETTE["BLACK"],
+                           bg=C64_PALETTE["LIGHT_BLUE"],
+                           activebackground=C64_PALETTE["CYAN"],
+                           activeforeground=C64_PALETTE["WHITE"],
+                           relief="raised", bd=4, padx=15, pady=5)
+        btn_sid.pack(side=tk.LEFT, padx=10)
+        
+        # Pulsante PLAYLIST
+        btn_playlist = tk.Button(btn_frame, text="PLAYLIST",
+                                command=on_playlist,
+                                font=(self.font_family, 12, "bold"),
+                                fg=C64_PALETTE["BLACK"],
+                                bg=C64_PALETTE["LIGHT_GREEN"],
+                                activebackground=C64_PALETTE["CYAN"],
+                                activeforeground=C64_PALETTE["WHITE"],
+                                relief="raised", bd=4, padx=15, pady=5)
+        btn_playlist.pack(side=tk.LEFT, padx=10)
+        
+        # Centra il dialog
+        dialog.update_idletasks()
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (350 // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (180 // 2)
+        dialog.geometry(f"350x180+{x}+{y}")
+    
+    def _load_sid_files(self):
+        """Carica file SID selezionati dall'utente"""
         files = filedialog.askopenfilenames(
             title="Select SID files",
             filetypes=[("SID files", "*.sid"), ("All files", "*.*")]
         )
         if files:
             self.tracks = list(files)
+            self.track_subsongs = {}  # Reset subsong map
+            for i in range(len(files)):
+                self.track_subsongs[i] = 1  # Default subsong 1 per tutti
             self.total_tracks = len(self.tracks)
             self.label_subtitle.config(text=f"{self.total_tracks} files loaded - Click PLAY")
             self.blink_title()
             self.update_status()
+            log_message(f"Caricati {self.total_tracks} file SID manualmente")
+    
+    def _load_playlist_dialog(self):
+        """Carica un file playlist selezionato dall'utente"""
+        file_path = filedialog.askopenfilename(
+            title="Select Playlist file",
+            filetypes=[
+                ("Playlist files", "*.txt *.cfg *.lst *.m3u *.pls"),
+                ("All files", "*.*")
+            ]
+        )
+        if file_path:
+            # Salva il percorso originale della playlist
+            original_playlist = self.playlist_file
+            
+            # Imposta temporaneamente il percorso della playlist
+            self.playlist_file = file_path
+            
+            # Carica la playlist
+            if self.load_playlist_file():
+                self.label_subtitle.config(text=f"{self.total_tracks} files from playlist - Click PLAY")
+                self.blink_title()
+                self.update_status()
+                log_message(f"Playlist caricata da: {file_path}")
+            else:
+                messagebox.showerror("Error", "Failed to load playlist")
+            
+            # Ripristina il percorso originale della playlist
+            self.playlist_file = original_playlist
     
     def load_playlist_file(self):
+        """
+        Carica il file playlist se esiste.
+        Supporta qualsiasi estensione: .txt, .cfg, .lst, .m3u, .pls, ecc.
+        Formato: /percorso/file.sid:traccia
+        """
         playlist_path = self.playlist_file
+        log_message(f"Cerco playlist: {playlist_path}")
+        print(f"📋 Cerco playlist: {playlist_path}")
+
         if not os.path.exists(playlist_path):
+            log_message(f"Playlist non trovata")
+            print(f"  ⚠ Playlist non trovata")
             return False
+
         try:
             with open(playlist_path, "r", encoding="utf-8") as f:
                 lines = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-        except:
+        except Exception as e:
+            log_message(f"Errore lettura playlist: {e}")
+            print(f"  ⚠ Errore lettura playlist: {e}")
             return False
+
         if not lines:
+            log_message(f"Playlist vuota")
+            print(f"  ⚠ Playlist vuota")
             return False
+
+        # Espandi le variabili d'ambiente e i percorsi ~
         expanded = [os.path.expanduser(os.path.expandvars(line)) for line in lines]
+        
+        # Mischia la playlist (come in sid_play4.py)
         random.shuffle(expanded)
-        self.tracks = [p for p in expanded if os.path.exists(p)]
+        
+        # Parsa ogni riga per estrarre percorso e numero di traccia
+        # Formato: /percorso/file.sid:traccia
+        self.tracks = []
+        self.track_subsongs = {}  # Mappa indice -> subsong
+        
+        for i, entry in enumerate(expanded):
+            if ':' in entry:
+                # Separa percorso e numero di traccia
+                parts = entry.rsplit(':', 1)
+                file_path = parts[0]
+                try:
+                    subsong = int(parts[1])
+                except ValueError:
+                    subsong = 1  # Default a 1 se non è un numero
+            else:
+                file_path = entry
+                subsong = 1  # Default a 1 se non specificato
+            
+            # Aggiungi solo se il file esiste
+            if os.path.exists(file_path):
+                self.tracks.append(file_path)
+                self.track_subsongs[len(self.tracks) - 1] = subsong
+        
         self.total_tracks = len(self.tracks)
+        
+        log_message(f"Caricate {self.total_tracks} tracce dalla playlist")
+        print(f"  ✓ Caricate {self.total_tracks} tracce dalla playlist (randomizzate)")
         return bool(self.tracks)
     
     def find_game_image(self, sid_path, sid_title):
@@ -935,11 +1142,16 @@ class SidTkPlayer:
             self.image_source_label.config(text="")
 
         try:
+            # Ottieni il numero di subsong per questa traccia
+            subsong = self.track_subsongs.get(self.current_index, 1)
+            
+            # Esegui sidplayfp con l'opzione -os<num> per specificare la traccia
             self.current_process = subprocess.Popen(
-                [self.sidplay_cmd, "-os1", track_path],
+                [self.sidplay_cmd, f"-os{subsong}", track_path],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL
             )
+            log_message(f"Riproduzione: {track_path} (traccia {subsong})")
         except FileNotFoundError:
             messagebox.showerror("Error", f"{self.sidplay_cmd} not found in PATH")
             self.stop_playlist()
@@ -963,11 +1175,11 @@ class SidTkPlayer:
         self.play_next_track()
     
     def show_about(self):
-        """Mostra la finestra About"""
+        """Mostra la finestra About con banner ASCII art"""
         about_window = tk.Toplevel(self.master)
         about_window.title("About SIDPLAYER")
         about_window.configure(bg=C64_PALETTE["BLACK"])
-        about_window.geometry("400x300")
+        about_window.geometry("520x600")  # Dimensione per banner + contenuti
         about_window.resizable(False, False)
 
         # Titolo
@@ -975,44 +1187,84 @@ class SidTkPlayer:
                               font=(self.font_family, 24, "bold"),
                               fg=C64_PALETTE["LIGHT_GREEN"],
                               bg=C64_PALETTE["BLACK"])
-        title_label.pack(pady=(30, 10))
+        title_label.pack(pady=(15, 5))
 
         # Versione
         version_label = tk.Label(about_window, text=VERSION,
                                font=(self.font_family, 14),
                                fg=C64_PALETTE["CYAN"],
                                bg=C64_PALETTE["BLACK"])
-        version_label.pack(pady=(0, 10))
+        version_label.pack(pady=(0, 5))
 
         # Autore
         author_label = tk.Label(about_window, text="Author: ezrad & IA",
                                font=(self.font_family, 12),
                                fg=C64_PALETTE["WHITE"],
                                bg=C64_PALETTE["BLACK"])
-        author_label.pack(pady=(0, 10))
+        author_label.pack(pady=(0, 15))
+
+        # Carica il banner ASCII art SOTTO all'autore
+        banner_path = None
+        banner_image = None
+        
+        # Cerca il banner in diverse posizioni
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "sidplayer_banner.png"),
+            os.path.expanduser("~/Library/Application Support/SIDPlayer/sidplayer_banner.png"),
+            "sidplayer_banner.png",
+        ]
+        
+        for path in possible_paths:
+            if os.path.exists(path):
+                banner_path = path
+                break
+        
+        if banner_path:
+            try:
+                img = Image.open(banner_path)
+                # Ridimensiona se necessario (max 480px larghezza)
+                max_width = 480
+                ratio = min(max_width / img.width, 1.0)
+                new_size = (int(img.width * ratio), int(img.height * ratio))
+                img = img.resize(new_size, Image.Resampling.LANCZOS)
+                banner_image = ImageTk.PhotoImage(img)
+                
+                banner_label = tk.Label(about_window, image=banner_image, bg=C64_PALETTE["BLACK"])
+                banner_label.image = banner_image  # Mantieni riferimento
+                banner_label.pack(pady=(5, 10))
+            except Exception as e:
+                log_message(f"Errore caricamento banner: {e}")
 
         # Anno
         year_label = tk.Label(about_window, text="2026",
                              font=(self.font_family, 12),
                              fg=C64_PALETTE["YELLOW"],
                              bg=C64_PALETTE["BLACK"])
-        year_label.pack(pady=(0, 10))
+        year_label.pack(pady=(5, 5))
 
         # Descrizione
         desc_label = tk.Label(about_window,
-                             text="C64 SID Music Player v2.2\nwith C64 cover art support\nImages searched by SID metadata",
+                             text="C64 SID Music Player\nwith C64 cover art support",
                              font=(self.font_family, 10),
                              fg=C64_PALETTE["LIGHT_GREY"],
                              bg=C64_PALETTE["BLACK"])
-        desc_label.pack(pady=(20, 10))
+        desc_label.pack(pady=(5, 5))
 
         # Info metadata
         info_label = tk.Label(about_window,
-                             text="Uses SID header metadata:\n- Title (for image search)\n- Author\n- Released/Copyright",
+                             text="Uses SID header metadata for image search",
                              font=(self.font_family, 8),
                              fg=C64_PALETTE["GREY"],
                              bg=C64_PALETTE["BLACK"])
-        info_label.pack(pady=(10, 5))
+        info_label.pack(pady=(5, 5))
+
+        # Contatti
+        contact_label = tk.Label(about_window,
+                                text="github.com/ezradibiase",
+                                font=(self.font_family, 9),
+                                fg=C64_PALETTE["LIGHT_BLUE"],
+                                bg=C64_PALETTE["BLACK"])
+        contact_label.pack(pady=(10, 5))
 
         # Pulsante di chiusura
         close_btn = tk.Button(about_window, text="CLOSE",
@@ -1021,17 +1273,17 @@ class SidTkPlayer:
                              fg=C64_PALETTE["BLACK"],
                              bg=C64_PALETTE["LIGHT_BLUE"],
                              padx=20, pady=5, anchor="center")
-        close_btn.pack(pady=(20, 0))
-        
+        close_btn.pack(pady=(15, 0))
+
         # Centra la finestra
         about_window.transient(self.master)
         about_window.grab_set()
         about_window.focus_set()
-        
+
         # Centra la finestra rispetto alla finestra principale
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (400 // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (300 // 2)
-        about_window.geometry(f"400x300+{x}+{y}")
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (520 // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (600 // 2)
+        about_window.geometry(f"520x600+{x}+{y}")
     
     def quit_all(self):
         if self.current_process:
@@ -1042,6 +1294,10 @@ class SidTkPlayer:
         self.master.destroy()
 
 def main():
+    # Log avvio programma
+    log_message("=== SIDPlayer Avvio ===")
+    log_message(f"Versione: {VERSION}")
+    
     # Verifica se PIL/Pillow è installato
     try:
         from PIL import Image, ImageTk
@@ -1049,13 +1305,14 @@ def main():
         print("ATTENZIONE: Pillow non è installato.")
         print("Le immagini dei videogiochi non potranno essere mostrate.")
         print("Installa con: pip install Pillow")
+        log_message("ATTENZIONE: Pillow non installato")
 
         # Crea una versione senza supporto immagini
         global SidTkPlayer
         original_init = SidTkPlayer.__init__
         def patched_init(self, master):
             original_init(self, master)
-            # Modifica l'interfaccia per mostrare messaggio invece di immagine
+            # Modifica l'interfaccia per mostrare messaggio invece di immagini
             self.image_label.config(text="[Install Pillow for game images]",
                                   font=(self.font_family, 10),
                                   fg=C64_PALETTE["RED"],
@@ -1064,12 +1321,15 @@ def main():
         SidTkPlayer.__init__ = patched_init
 
     # Carica la configurazione
+    log_message("Caricamento configurazione...")
     config = Config()
-    
+    log_message(f"Config caricata da: {config.config_file}")
+
     # Crea le directory necessarie
     config.ensure_directories()
-    
+
     root = tk.Tk()
+    log_message("GUI Tk inizializzata")
 
     # Messaggi informativi
     if config.rawg_api_key:

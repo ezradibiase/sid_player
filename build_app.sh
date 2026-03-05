@@ -5,6 +5,7 @@ APP_NAME="SIDPlayer"
 APP_DIR="${APP_NAME}.app"
 SCRIPT_PATH="sid_play5.py"
 ICON_FILE="commodore.icns"
+CONFIG_FILE="sidplayer.cfg"
 
 # Trova il percorso di Python3 con le librerie installate
 PYTHON_PATH=$(which python3)
@@ -33,6 +34,33 @@ mkdir -p "${APP_DIR}/Contents/Resources"
 
 # Copia l'icona
 cp "$ICON_FILE" "${APP_DIR}/Contents/Resources/"
+
+# Copia la playlist (se esiste) - dentro l'app bundle
+if [ -f "playlist.txt" ]; then
+    cp "playlist.txt" "${APP_DIR}/Contents/MacOS/"
+    echo "✓ Playlist inclusa: playlist.txt"
+fi
+
+# Copia il banner (se esiste) - dentro l'app bundle e config utente
+if [ -f "sidplayer_banner.png" ]; then
+    cp "sidplayer_banner.png" "${APP_DIR}/Contents/MacOS/"
+    echo "✓ Banner incluso nell'app"
+fi
+
+# Crea la directory di configurazione utente e copia i file (se esistono)
+USER_CONFIG_DIR="$HOME/Library/Application Support/SIDPlayer"
+if [ -f "$CONFIG_FILE" ]; then
+    mkdir -p "$USER_CONFIG_DIR"
+    cp "$CONFIG_FILE" "$USER_CONFIG_DIR/"
+    echo "✓ Configurazione installata in: $USER_CONFIG_DIR"
+fi
+
+if [ -f "sidplayer_banner.png" ]; then
+    mkdir -p "$USER_CONFIG_DIR"
+    cp "sidplayer_banner.png" "$USER_CONFIG_DIR/"
+    echo "✓ Banner installato in: $USER_CONFIG_DIR"
+fi
+echo "  (puoi modificare i file senza ricostruire l'app)"
 
 # Crea il file PkgInfo
 echo "APPL????" > "${APP_DIR}/Contents/PkgInfo"
