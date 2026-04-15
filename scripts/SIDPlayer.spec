@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 a = Analysis(
-    ['../sid_play_X.py'],
+    ['../sidplayer.py'],
     pathex=['..'],
     binaries=[],
     datas=[
