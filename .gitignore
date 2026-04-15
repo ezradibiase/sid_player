@@ -1,8 +1,26 @@
+# Credenziali e configurazione utente
+sidplayer.cfg
+playlist.txt
+igdb_credentials.txt
+rawg_api_key.txt
+
+# Build
+archive/
+scripts/build/
+scripts/dist/
+
+# Runtime
+__pycache__/
+*.log
+*.pyc
+
+# OS
+.DS_Store
 images/
 build/
 dist/
+
 SIDPlayer.app/
 SIDPlayer_StandAlone.app/
 SIDPlayer_v2.2_Mac
-.DS_Store
 SIDPlayer_v2.2_Mac.zip
