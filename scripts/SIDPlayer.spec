@@ -1,12 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
-    ['sid_play5.py'],
-    pathex=[],
+    ['../sid_play_X.py'],
+    pathex=['..'],
     binaries=[],
-    datas=[('sidplayer_banner.png', '.'), ('playlist.txt', '.')],
-    hiddenimports=[],
+    datas=[
+        ('../stil_reader.py', '.'),
+        ('../sidplayer_banner.png', '.'),
+    ],
+    hiddenimports=['sounddevice', 'numpy'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -35,11 +37,11 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['commodore.icns'],
+    icon=['../commodore.icns'],
 )
 app = BUNDLE(
     exe,
     name='SIDPlayer.app',
-    icon='commodore.icns',
-    bundle_identifier=None,
+    icon='../commodore.icns',
+    bundle_identifier='com.ezrad.sidplayer',
 )

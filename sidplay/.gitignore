@@ -1,0 +1,73 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Configuration (user-specific)
+sidplayer.cfg
+playlist.txt
+igdb_credentials.txt
+rawg_api_key.txt
+
+# Logs
+*.log
+sidplayer_debug.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Images cache (generated)
+images/
+
+# Build artifacts
+*.app/
+*.spec
+build_app.sh
+build_standalone.sh
+create_*.py
+
+# Old versions
+sid_play.py
+sid_play2.py
+sid_play3.py
+sid_play4.py
+sid_play5.py
+
+# Test files
+test_*.py
+*_test.py
+
+# Temporary
+*.tmp
+*.bak
