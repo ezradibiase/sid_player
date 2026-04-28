@@ -111,6 +111,12 @@ igdb_access_token =
 # Comando sidplayfp (deve essere nel PATH)
 sidplay_cmd = sidplayfp
 
+# Durata massima per brano nel formato [mins:]secs (es. 3:30, 4:00, 180)
+# I brani con durata nota nell'HVSC Songlengths database terminano al momento
+# esatto indipendentemente da questo valore. Per i brani senza durata nota,
+# questo limite evita il loop infinito. Impostare a 0 per nessun limite.
+play_time = 3:30
+
 [window]
 width = 640
 height = 480
@@ -185,6 +191,18 @@ L'app viene creata in `scripts/dist/SIDPlayer.app`.
 ---
 
 ## Risoluzione problemi
+
+### I brani loopano troppo a lungo o terminano troppo presto
+
+La durata dei brani SID è controllata dal parametro `play_time` in `sidplayer.cfg`. I file SID che hanno una voce nell'HVSC Songlengths database terminano al momento esatto registrato nel database, indipendentemente da `play_time`. Per i brani senza durata nota, `play_time` definisce il timeout massimo prima di passare alla traccia successiva.
+
+```ini
+[player]
+play_time = 3:30   # formato mins:secs oppure secondi interi (es. 180)
+                   # 0 = nessun limite (la traccia loopa finché non si preme NEXT o STOP)
+```
+
+Per sfruttare al meglio il Songlengths database, scarica la HVSC completa (vedi sezione STIL) e configura `sidplayfp` affinché la usi impostando `Songlengths` nel file di configurazione di sidplayfp (`~/.config/sidplayfp/sidplayfp.ini`).
 
 ### "sidplayfp not found"
 Installa `sidplayfp` (vedi Requisiti) e verifica che sia nel PATH:
