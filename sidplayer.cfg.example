@@ -27,6 +27,13 @@ igdb_access_token =
 # Comando per riprodurre i file SID
 sidplay_cmd = sidplayfp
 
+# Durata massima per ogni brano nel formato [mins:]secs (es. 3:30, 180, 4:00)
+# I brani con informazioni di durata nell'HVSC Songlengths database
+# terminano al momento esatto indipendentemente da questo valore.
+# Per i brani senza durata nota, questo limite previene il loop infinito.
+# Impostare a 0 per nessun limite.
+play_time = 3:30
+
 # Nota: Il font "C64 Pro Mono" viene usato se installato nel sistema
 # Altrimenti viene usato un font di fallback (Courier)
 
