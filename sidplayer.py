@@ -110,6 +110,7 @@ class Config:
         },
         'player': {
             'sidplay_cmd': 'sidplayfp',
+            'play_time': '3:30',
         },
         'window': {
             'width': '640',
@@ -215,6 +216,10 @@ class Config:
     @property
     def sidplay_cmd(self):
         return self.get('player', 'sidplay_cmd')
+
+    @property
+    def play_time(self):
+        return self.get('player', 'play_time').strip()
 
     @property
     def font_family(self):
@@ -784,6 +789,7 @@ class AudioEngine:
         # volume: float 0.0–1.0, scritto dal main thread, letto dal thread audio
         self.volume = initial_volume
         self.output_device = None   # None = device di default del sistema
+        self.play_time = ''         # es. '3:30' → -t3:30; vuoto = nessun limite
         self._stop_event = threading.Event()
         self._thread = None
         self._process = None
@@ -869,6 +875,16 @@ class AudioEngine:
     # Riproduzione via FIFO + sounddevice (con volume)
     # ------------------------------------------------------------------
 
+    def _build_cmd(self, sidplay_cmd, subsong, extra_flag, sid_path):
+        """Costruisce la lista di argomenti per sidplayfp."""
+        cmd = [sidplay_cmd, f"-os{subsong}"]
+        if self.play_time:
+            cmd.append(f"-t{self.play_time}")
+        if extra_flag:
+            cmd.append(extra_flag)
+        cmd.append(sid_path)
+        return cmd
+
     def _play_via_fifo(self, sid_path, subsong, sidplay_cmd, on_done_callback):
         # sidplayfp aggiunge automaticamente .wav al nome del file
         fifo_base = os.path.join(tempfile.gettempdir(), f"sidplayer_{os.getpid()}")
@@ -889,7 +905,7 @@ class AudioEngine:
         # -os<subsong> → subsong specifico in modalità single
         try:
             self._process = subprocess.Popen(
-                [sidplay_cmd, f"-os{subsong}", f"-w{fifo_base}", sid_path],
+                self._build_cmd(sidplay_cmd, subsong, f"-w{fifo_base}", sid_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -979,7 +995,7 @@ class AudioEngine:
     def _play_direct(self, sid_path, subsong, sidplay_cmd, on_done_callback):
         """Riproduzione senza sounddevice: usa sidplayfp direttamente."""
         self._process = subprocess.Popen(
-            [sidplay_cmd, f"-os{subsong}", sid_path],
+            self._build_cmd(sidplay_cmd, subsong, None, sid_path),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
@@ -1011,7 +1027,7 @@ class AudioEngine:
 
         try:
             self._process = subprocess.Popen(
-                [sidplay_cmd, f"-os{subsong}", f"-w{tmp_base}", sid_path],
+                self._build_cmd(sidplay_cmd, subsong, f"-w{tmp_base}", sid_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -1103,6 +1119,7 @@ class SidTkPlayer:
         self.playlist_file = self.config.playlist_file
         self.sidplay_cmd = self.config.sidplay_cmd
         self.font_family = self.config.font_family
+        self.audio_engine.play_time = self.config.play_time
 
         # Imposta la finestra
         self.master.title(f"SIDPLAYER C64 {VERSION}")
@@ -1772,23 +1789,19 @@ class SidTkPlayer:
         self.blink_title()
         self.update_status()
 
-        # Immagine
-        image_path, image_source = self.find_game_image(track_path, main_title)
-        if image_path:
-            self.load_and_display_image(image_path, image_source)
-        else:
-            self.current_image = None
-            self.image_label.config(
-                image='',
-                text="Nessuna immagine\ndisponibile",
-                font=(self.font_family, 14),
-                fg=C64_PALETTE["DARK_GREY"],
-                bg=C64_PALETTE["BLACK"],
-                justify="center",
-            )
-            self.image_source_label.config(text="")
+        # Mostra placeholder immagine subito (non blocca l'avvio audio)
+        self.current_image = None
+        self.image_label.config(
+            image='',
+            text="...",
+            font=(self.font_family, 14),
+            fg=C64_PALETTE["DARK_GREY"],
+            bg=C64_PALETTE["BLACK"],
+            justify="center",
+        )
+        self.image_source_label.config(text="")
 
-        # Avvia riproduzione tramite AudioEngine
+        # Avvia riproduzione subito, senza aspettare le immagini
         try:
             self.audio_engine.play(track_path, subsong, self.sidplay_cmd)
             log_message(f"Riproduzione: {track_path} (traccia {subsong})")
@@ -1798,6 +1811,33 @@ class SidTkPlayer:
             messagebox.showerror("Error", f"{self.sidplay_cmd} not found in PATH")
             self.stop_playlist()
             return
+
+        # Fetch immagine in background: non blocca la riproduzione
+        track_index_at_start = self.current_index
+
+        def _fetch_image_bg():
+            image_path, image_source = self.find_game_image(track_path, main_title)
+
+            def _update_ui():
+                # Scarta il risultato se nel frattempo è cambiata la traccia
+                if self.current_index != track_index_at_start:
+                    return
+                if image_path:
+                    self.load_and_display_image(image_path, image_source)
+                else:
+                    self.image_label.config(
+                        image='',
+                        text="Nessuna immagine\ndisponibile",
+                        font=(self.font_family, 14),
+                        fg=C64_PALETTE["DARK_GREY"],
+                        bg=C64_PALETTE["BLACK"],
+                        justify="center",
+                    )
+                    self.image_source_label.config(text="")
+
+            self.master.after(0, _update_ui)
+
+        threading.Thread(target=_fetch_image_bg, daemon=True, name="ImageFetch").start()
 
         # Polling per avanzare alla traccia successiva (come check_track_done originale)
         self.master.after(500, lambda idx=self.current_index: self._poll_track_end(idx))
