@@ -39,16 +39,29 @@ exe = EXE(
     entitlements_file=None,
     icon=['../commodore.icns'],
 )
+import subprocess, os
+
+APP_VERSION = '6.0.2'
+
 app = BUNDLE(
     exe,
     name='SIDPlayer.app',
     icon='../commodore.icns',
     bundle_identifier='com.ezrad.sidplayer',
-    version='6.0.2',
+    version=APP_VERSION,
     info_plist={
-        'CFBundleShortVersionString': '6.0.2',
-        'CFBundleVersion': '6.0.2',
+        'CFBundleShortVersionString': APP_VERSION,
+        'CFBundleVersion': APP_VERSION,
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.13',
     },
 )
+
+# PyInstaller ignora CFBundleShortVersionString nell'info_plist — lo scriviamo via PlistBuddy
+_plist = os.path.join(DISTPATH, 'SIDPlayer.app', 'Contents', 'Info.plist')
+if os.path.exists(_plist):
+    for _cmd in [
+        f"Set :CFBundleShortVersionString {APP_VERSION}",
+        f"Set :CFBundleVersion {APP_VERSION}",
+    ]:
+        subprocess.run(['/usr/libexec/PlistBuddy', '-c', _cmd, _plist], check=False)
