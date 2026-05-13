@@ -2,7 +2,7 @@
 """
 SIDPlayer C64-Style con supporto copertine C64 da IGDB e RAWG e STIL
 e controllo volume applicativo indipendente dal volume di sistema
-Versione: v6.0 (Cross-platform, silent mode, terminal detach)
+Versione: v6.0.1 (Cross-platform, silent mode, terminal detach)
 Autore: ezrad & IA
 Anno: 2026
 """
@@ -71,7 +71,7 @@ except ImportError:
     HAS_SOUNDDEVICE = False
     log_message("ATTENZIONE: 'sounddevice' non installato - uso riproduzione diretta")
 
-VERSION = "v6.0"
+VERSION = "v6.0.1"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
 FONT_FALLBACK = "Courier"
 CONFIG_FILE = "sidplayer.cfg"
@@ -1119,7 +1119,6 @@ class SidTkPlayer:
         self.playlist_file = self.config.playlist_file
         self.sidplay_cmd = self.config.sidplay_cmd
         self.font_family = self.config.font_family
-        self.audio_engine.play_time = self.config.play_time
 
         # Imposta la finestra
         self.master.title(f"SIDPLAYER C64 {VERSION}")
@@ -1157,6 +1156,7 @@ class SidTkPlayer:
 
         # === Audio Engine ===
         self.audio_engine = AudioEngine(initial_volume=0.7)
+        self.audio_engine.play_time = self.config.play_time
 
         # ---------------------------------------------------------------
         # UI
