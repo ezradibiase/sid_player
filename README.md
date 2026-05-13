@@ -192,17 +192,19 @@ L'app viene creata in `scripts/dist/SIDPlayer.app`.
 
 ## Risoluzione problemi
 
-### I brani loopano troppo a lungo o terminano troppo presto
+### Durata dei brani: come funziona
 
-La durata dei brani SID è controllata dal parametro `play_time` in `sidplayer.cfg`. I file SID che hanno una voce nell'HVSC Songlengths database terminano al momento esatto registrato nel database, indipendentemente da `play_time`. Per i brani senza durata nota, `play_time` definisce il timeout massimo prima di passare alla traccia successiva.
+SIDPlayer usa il flag `-os` di `sidplayfp` (single track mode): ogni brano viene suonato **una volta sola** e poi `sidplayfp` termina automaticamente. La durata viene determinata dall'HVSC Songlengths database configurato in `sidplayfp`.
+
+Per sfruttare al meglio questa funzionalità, scarica la HVSC completa (vedi sezione STIL) e imposta `Songlengths` nel file di configurazione di `sidplayfp` (`~/.config/sidplayfp/sidplayfp.ini`).
+
+Il parametro `play_time` in `sidplayer.cfg` è un **timeout di emergenza opzionale** per i brani non presenti nel database (che altrimenti looperebbero indefinitamente). Di default è disabilitato:
 
 ```ini
 [player]
-play_time = 3:30   # formato mins:secs oppure secondi interi (es. 180)
-                   # 0 = nessun limite (la traccia loopa finché non si preme NEXT o STOP)
+play_time =        # vuoto = nessun timeout, sidplayfp decide la durata
+# play_time = 5:00 # abilita timeout di 5 minuti come fallback
 ```
-
-Per sfruttare al meglio il Songlengths database, scarica la HVSC completa (vedi sezione STIL) e configura `sidplayfp` affinché la usi impostando `Songlengths` nel file di configurazione di sidplayfp (`~/.config/sidplayfp/sidplayfp.ini`).
 
 ### "sidplayfp not found"
 Installa `sidplayfp` (vedi Requisiti) e verifica che sia nel PATH:

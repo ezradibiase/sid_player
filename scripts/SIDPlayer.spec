@@ -44,10 +44,10 @@ app = BUNDLE(
     name='SIDPlayer.app',
     icon='../commodore.icns',
     bundle_identifier='com.ezrad.sidplayer',
-    version='6.0.1',
+    version='6.0.2',
     info_plist={
-        'CFBundleShortVersionString': '6.0.1',
-        'CFBundleVersion': '6.0.1',
+        'CFBundleShortVersionString': '6.0.2',
+        'CFBundleVersion': '6.0.2',
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.13',
     },
