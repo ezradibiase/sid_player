@@ -4,6 +4,16 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.0.2] — 2026-05-13
+
+### Fix
+- Rimosso il default `play_time = 3:30`: il timeout fisso tagliava i brani lunghi e
+  faceva loopare quelli brevi. `sidplayfp` usa già `-os` (single track mode) che termina
+  il brano automaticamente tramite l'HVSC Songlengths database. `play_time` rimane
+  disponibile come fallback opt-in per brani non presenti nel database.
+
+---
+
 ## [v6.0.1] — 2026-05-13
 
 ### Fix

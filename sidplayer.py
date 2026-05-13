@@ -2,7 +2,7 @@
 """
 SIDPlayer C64-Style con supporto copertine C64 da IGDB e RAWG e STIL
 e controllo volume applicativo indipendente dal volume di sistema
-Versione: v6.0.1 (Cross-platform, silent mode, terminal detach)
+Versione: v6.0.2 (Cross-platform, silent mode, terminal detach)
 Autore: ezrad & IA
 Anno: 2026
 """
@@ -71,7 +71,7 @@ except ImportError:
     HAS_SOUNDDEVICE = False
     log_message("ATTENZIONE: 'sounddevice' non installato - uso riproduzione diretta")
 
-VERSION = "v6.0.1"
+VERSION = "v6.0.2"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
 FONT_FALLBACK = "Courier"
 CONFIG_FILE = "sidplayer.cfg"
@@ -110,7 +110,7 @@ class Config:
         },
         'player': {
             'sidplay_cmd': 'sidplayfp',
-            'play_time': '3:30',
+            'play_time': '',
         },
         'window': {
             'width': '640',
