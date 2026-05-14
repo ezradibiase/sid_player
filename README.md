@@ -280,3 +280,13 @@ STIL contiene titoli e note sui subsong dell'HVSC. Per usarlo:
 - [IGDB API](https://api-docs.igdb.com/)
 - [RAWG.io API](https://rawg.io/apidocs)
 - [C64 Pro Mono Font](https://github.com/mborgbrant/c64-pro-mono)
+
+## Licenza
+
+MIT — vedi [LICENSE](LICENSE).
+
+## Trademark
+
+"Commodore" e il logo Commodore sono marchi dei rispettivi proprietari.
+Questo progetto è un'opera fan indipendente e non è affiliato, approvato
+o connesso a Commodore Business Machines Ltd o a qualsiasi entità correlata.
