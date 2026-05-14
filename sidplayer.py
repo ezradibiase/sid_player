@@ -98,11 +98,11 @@ DATASETTE = {
 }
 
 TRANSPORT = {
-    "BG":      "#b0afb4",   # sfondo area trasporto
+    "BG":      "#000000",   # sfondo area trasporto
     "BTN":     "#493e39",   # superficie tasto
     "BTN_ACT": "#6b5a52",   # tasto premuto
     "BTN_DIS": "#7a6a62",   # tasto disabilitato
-    "TEXT":    "#3a302d",   # testo/simbolo sul tasto
+    "TEXT":    "#b0afb4",   # testo/simbolo sul tasto
 }
 
 
@@ -1252,7 +1252,7 @@ class SidTkPlayer:
         _btn_style = dict(
             font=(self.font_family, 10, "bold"),
             fg=C64_PALETTE["BLACK"],
-            bg=TRANSPORT["BG"],
+            bg="#b0afb4",
             activebackground=C64_PALETTE["LIGHT_GREY"],
             activeforeground=C64_PALETTE["BLACK"],
             relief="raised", bd=3, padx=6, pady=2,
@@ -1310,12 +1310,43 @@ class SidTkPlayer:
         self.mute_btn.pack(side=tk.LEFT, padx=(4, 0))
 
         # ---------------------------------------------------------------
-        # Transport bar — etichette sopra i tasti, tasti stile Datasette scuro
+        # Transport bar — badge Commodore in cima + tasti
         # ---------------------------------------------------------------
         transport_outer = tk.Frame(self.canvas,
                                    bg=TRANSPORT["BG"],
                                    relief="ridge", bd=4)
         transport_outer.place(x=20, y=426, width=600, height=100)
+
+        # Badge Commodore
+        _badge_h = 30
+        badge_canvas = tk.Canvas(transport_outer, height=_badge_h,
+                                 bg=TRANSPORT["BG"], highlightthickness=0)
+        badge_canvas.pack(fill=tk.X, side=tk.TOP)
+
+        def _draw_badge(event=None):
+            badge_canvas.delete("all")
+            w = badge_canvas.winfo_width()
+            if w < 10:
+                return
+            h = _badge_h
+            col = TRANSPORT["TEXT"]
+
+            # Testo "C= commodore"
+            badge_canvas.create_text(10, h // 2, text="C= commodore",
+                                     fill=col, font=(self.font_family, 13, "bold"),
+                                     anchor="w")
+
+            # Barre a spessore decrescente via Unicode block elements
+            bars = "▉▊▋▌▍▎▏"
+            badge_canvas.create_text(w - 10, h // 2, text=bars,
+                                     fill=col, font=("Courier", 16, "bold"),
+                                     anchor="e")
+
+        badge_canvas.bind("<Configure>", _draw_badge)
+
+        # Riga bottoni
+        btn_row = tk.Frame(transport_outer, bg=TRANSPORT["BG"])
+        btn_row.pack(fill=tk.X, side=tk.TOP, expand=True)
 
         _btn_w, _btn_h = 120, 56
 
@@ -1327,8 +1358,8 @@ class SidTkPlayer:
         ]
 
         for slot_idx, (symbol, label, cmd) in enumerate(transport_specs, start=3):
-            btn = self._create_transport_btn(transport_outer, symbol, label, cmd, _btn_w, _btn_h)
-            btn.pack(side=tk.LEFT, padx=10, pady=9)
+            btn = self._create_transport_btn(btn_row, symbol, label, cmd, _btn_w, _btn_h)
+            btn.pack(side=tk.LEFT, padx=10, pady=4)
             self.buttons[slot_idx] = btn
 
         # ---------------------------------------------------------------
