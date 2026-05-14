@@ -71,7 +71,7 @@ except ImportError:
     HAS_SOUNDDEVICE = False
     log_message("ATTENZIONE: 'sounddevice' non installato - uso riproduzione diretta")
 
-VERSION = "v6.0.3"
+VERSION = "v6.1"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
 FONT_FALLBACK = "Courier"
 CONFIG_FILE = "sidplayer.cfg"

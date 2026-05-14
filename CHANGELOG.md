@@ -4,6 +4,35 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.1] — 2026-05-14
+
+### Aggiunto
+- **Nuova interfaccia grafica ispirata al Commodore Datasette VC-1530.**
+- **Finestrella**: pannello centrale con bordo beige plastico e interno scuro che mostra
+  cover del gioco, titolo, STIL subtitle, autore, anno di rilascio e numero traccia.
+- **Banner di avvio**: `sidplayer_banner.png` mostrato nella finestrella prima che inizi
+  la riproduzione; sostituito automaticamente dalla cover del gioco durante il play.
+- **Bottone PREV** (◄◄): torna al brano precedente; al primo brano risuona dall'inizio.
+- **PLAY/PAUSE unificato**: un unico bottone toggle che avvia, mette in pausa e riprende
+  (simboli ▶ PLAY / ⏸ PAUSE / ▶ RESUME).
+- Nuovi campi nella finestrella: `label_released` (anno/publisher) e `label_track`
+  (numero traccia corrente sul totale).
+
+### Modifiche
+- Rimosso il pulsante **QUIT**: la finestra si chiude con la ✕ del window manager.
+  Aggiunto `WM_DELETE_WINDOW` binding per terminare correttamente `sidplayfp`.
+- Font dei bottoni utility ridotto a 10pt (il testo non fuoriesce più dai bordi).
+- Bottoni di trasporto con palette beige Datasette (`#BBA888`, `relief="raised"`).
+- **Config univoca per piattaforma** — rimossi i fallback a `~/` e alla directory
+  dello script; la directory viene creata automaticamente se non esiste:
+  - macOS: `~/Library/Application Support/SIDPlayer/sidplayer.cfg`
+  - Linux: `~/.config/SIDPlayer/sidplayer.cfg`
+  - Windows: `%APPDATA%\SIDPlayer\sidplayer.cfg`
+- Finestra ridimensionata a **640×580** px.
+- `load_and_display_image`: dimensione massima cover adattata a 180×180 px per la finestrella.
+
+---
+
 ## [v6.0.3] — 2026-05-14
 
 ### Modifiche

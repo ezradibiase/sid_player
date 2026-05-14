@@ -1,8 +1,8 @@
 # SIDPlayer C64
 
-Player di file **SID** (Commodore 64) con interfaccia grafica stile C64, supporto copertine dei giochi e playlist personalizzate.
+Player di file **SID** (Commodore 64) con interfaccia grafica ispirata al Commodore Datasette, supporto copertine dei giochi e playlist personalizzate.
 
-![Version](https://img.shields.io/badge/version-v6.0-blue)
+![Version](https://img.shields.io/badge/version-v6.1-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 
@@ -10,10 +10,12 @@ Player di file **SID** (Commodore 64) con interfaccia grafica stile C64, support
 
 ## Caratteristiche
 
-- Interfaccia grafica stile Commodore 64 (colori e font originali)
+- Interfaccia grafica ispirata al **Commodore Datasette VC-1530**
+- **Finestrella** con cover del gioco, titolo, autore, anno e numero traccia
 - Riproduzione file `.sid` tramite `sidplayfp`
-- Controllo volume in tempo reale
+- Controllo volume in tempo reale con pulsante mute
 - Pausa e ripresa della riproduzione
+- Navigazione playlist: brano precedente (◄◄) e successivo (▶▶)
 - Selezione del device di output audio (incluse casse Bluetooth)
 - Playlist personalizzate con supporto subsong
 - Copertine dei giochi da IGDB e RAWG (opzionale, richiede API key)
@@ -80,10 +82,19 @@ Doppio clic su `start_sidplayer.bat`.
 
 ## Configurazione
 
-Copia il file di esempio e personalizzalo:
+Il file di configurazione viene creato automaticamente nella posizione canonica per la piattaforma:
+
+| Sistema | Percorso |
+|---------|----------|
+| macOS | `~/Library/Application Support/SIDPlayer/sidplayer.cfg` |
+| Linux | `~/.config/SIDPlayer/sidplayer.cfg` |
+| Windows | `%APPDATA%\SIDPlayer\sidplayer.cfg` |
+
+Per personalizzarlo, copia il file di esempio nella posizione corretta:
 
 ```bash
-cp sidplayer.cfg.example sidplayer.cfg
+# macOS
+cp sidplayer.cfg.example ~/Library/Application\ Support/SIDPlayer/sidplayer.cfg
 ```
 
 Struttura di `sidplayer.cfg`:
@@ -111,15 +122,9 @@ igdb_access_token =
 # Comando sidplayfp (deve essere nel PATH)
 sidplay_cmd = sidplayfp
 
-# Durata massima per brano nel formato [mins:]secs (es. 3:30, 4:00, 180)
-# I brani con durata nota nell'HVSC Songlengths database terminano al momento
-# esatto indipendentemente da questo valore. Per i brani senza durata nota,
-# questo limite evita il loop infinito. Impostare a 0 per nessun limite.
-play_time = 3:30
-
 [window]
 width = 640
-height = 480
+height = 580
 resizable = false
 ```
 
@@ -157,20 +162,37 @@ Per usare una playlist come default all'avvio, imposta `playlist_file` in `sidpl
 
 ## Interfaccia
 
+### Finestrella
+
+Il pannello centrale, ispirato alla finestrella trasparente del Datasette, mostra:
+- **Cover del gioco** (da IGDB o RAWG) a sinistra
+- **Titolo**, subtitle STIL, **autore**, anno di rilascio e numero traccia a destra
+- Il banner dell'applicazione viene mostrato prima che inizi la riproduzione
+
+### Bottoni utility
+
 | Pulsante | Funzione |
 |----------|----------|
 | **LOAD** | Carica file SID o una playlist |
-| **PLAY** | Avvia la riproduzione |
-| **PAUSE** | Mette in pausa / riprende |
-| **NEXT** | Passa alla traccia successiva |
-| **STOP** | Ferma la riproduzione |
 | **OUT** | Seleziona il device di output audio |
 | **ABOUT** | Informazioni sull'applicazione |
-| **QUIT** | Esce |
+| **VOL** | Slider volume (0–100%) |
+| **M** | Mute / unmute |
+
+### Bottoni trasporto (stile Datasette)
+
+| Pulsante | Funzione |
+|----------|----------|
+| **◄◄ PREV** | Torna al brano precedente (risuona il primo se già al primo) |
+| **▶ PLAY / ⏸ PAUSE** | Avvia la riproduzione; durante il play alterna pausa e ripresa |
+| **▶▶ NEXT** | Passa alla traccia successiva |
+| **■ STOP** | Ferma la riproduzione |
+
+Per chiudere l'applicazione usa la **✕** del window manager (la finestra salva lo stato correttamente).
 
 ### Selezione output audio
 
-Il pulsante **OUT** apre un popup con tutti i device audio disponibili nel sistema, incluse le casse Bluetooth connesse. Permette di separare l'audio del player dall'audio di sistema (utile se si vuole ascoltare i SID in cuffia o su casse BT mentre il sistema usa un altro output).
+Il pulsante **OUT** apre un popup con tutti i device audio disponibili nel sistema, incluse le casse Bluetooth connesse. Permette di separare l'audio del player dall'audio di sistema.
 
 Il device selezionato viene usato dalla traccia successiva in poi.
 
