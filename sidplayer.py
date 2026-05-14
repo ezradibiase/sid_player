@@ -97,6 +97,14 @@ DATASETTE = {
     "GLASS":   "#0D0D0D",   # interno finestrella
 }
 
+TRANSPORT = {
+    "BG":      "#b0afb4",   # sfondo area trasporto
+    "BTN":     "#493e39",   # superficie tasto
+    "BTN_ACT": "#6b5a52",   # tasto premuto
+    "BTN_DIS": "#7a6a62",   # tasto disabilitato
+    "TEXT":    "#3a302d",   # testo/simbolo sul tasto
+}
+
 
 def get_available_font(preferred_font, fallback_font):
     """Verifica se il font preferito è disponibile nel sistema."""
@@ -1115,7 +1123,7 @@ class SidTkPlayer:
 
         # Imposta la finestra
         self.master.title(f"SIDPLAYER C64 {VERSION}")
-        self.master.configure(bg=C64_PALETTE["BLACK"])
+        self.master.configure(bg="#C3A774")
         self.master.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.master.resizable(self.config.window_resizable, self.config.window_resizable)
         self.master.protocol("WM_DELETE_WINDOW", self.quit_all)
@@ -1158,10 +1166,8 @@ class SidTkPlayer:
         # UI
         # ---------------------------------------------------------------
         self.canvas = tk.Canvas(master, width=self.config.window_width, height=self.config.window_height,
-                                bg=C64_PALETTE["BLACK"], highlightthickness=0)
+                                bg="#C3A774", highlightthickness=0)
         self.canvas.pack()
-        for i in range(0, self.config.window_height, 4):
-            self.canvas.create_line(0, i, self.config.window_width, i, fill="#111111", width=1)
 
         # ---------------------------------------------------------------
         # Header (y=0, h=32)
@@ -1234,7 +1240,7 @@ class SidTkPlayer:
         # Utility row (y=378, h=36)
         # [LOAD] [OUT] [ABOUT]  spacer  [VOL label + slider + M]
         # ---------------------------------------------------------------
-        util_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"])
+        util_frame = tk.Frame(self.canvas, bg="#C3A774")
         util_frame.place(x=20, y=378, width=600, height=36)
 
         # Muted state init
@@ -1246,9 +1252,9 @@ class SidTkPlayer:
         _btn_style = dict(
             font=(self.font_family, 10, "bold"),
             fg=C64_PALETTE["BLACK"],
-            bg=C64_PALETTE["LIGHT_BLUE"],
-            activebackground=C64_PALETTE["CYAN"],
-            activeforeground=C64_PALETTE["WHITE"],
+            bg=TRANSPORT["BG"],
+            activebackground=C64_PALETTE["LIGHT_GREY"],
+            activeforeground=C64_PALETTE["BLACK"],
             relief="raised", bd=3, padx=6, pady=2,
         )
 
@@ -1265,13 +1271,13 @@ class SidTkPlayer:
         self.buttons[2] = btn_about
 
         # Spacer
-        tk.Frame(util_frame, bg=C64_PALETTE["BLACK"]).pack(side=tk.LEFT, expand=True, fill="x")
+        tk.Frame(util_frame, bg="#C3A774").pack(side=tk.LEFT, expand=True, fill="x")
 
         # Volume
         tk.Label(util_frame, text="VOL",
                  font=(self.font_family, 9, "bold"),
-                 fg=C64_PALETTE["LIGHT_BLUE"],
-                 bg=C64_PALETTE["BLACK"]).pack(side=tk.LEFT, padx=(0, 4))
+                 fg=C64_PALETTE["DARK_GREY"],
+                 bg="#C3A774").pack(side=tk.LEFT, padx=(0, 4))
 
         self.volume_var = tk.IntVar(value=70)
         self.volume_slider = tk.Scale(
@@ -1280,9 +1286,9 @@ class SidTkPlayer:
             orient=tk.HORIZONTAL,
             variable=self.volume_var,
             command=self._on_volume_change,
-            bg=C64_PALETTE["BLACK"],
-            fg=C64_PALETTE["LIGHT_BLUE"],
-            troughcolor=C64_PALETTE["DARK_GREY"],
+            bg="#C3A774",
+            fg=C64_PALETTE["DARK_GREY"],
+            troughcolor=C64_PALETTE["GREY"],
             activebackground=C64_PALETTE["CYAN"],
             highlightthickness=0,
             sliderrelief="flat",
@@ -1304,20 +1310,20 @@ class SidTkPlayer:
         self.mute_btn.pack(side=tk.LEFT, padx=(4, 0))
 
         # ---------------------------------------------------------------
-        # Transport bar (y=422, h=72) — bottoni PIL stile Datasette
+        # Transport bar — etichette sopra i tasti, tasti stile Datasette scuro
         # ---------------------------------------------------------------
         transport_outer = tk.Frame(self.canvas,
-                                   bg=DATASETTE["PLASTIC"],
+                                   bg=TRANSPORT["BG"],
                                    relief="ridge", bd=4)
         transport_outer.place(x=20, y=426, width=600, height=100)
 
         _btn_w, _btn_h = 120, 56
 
         transport_specs = [
-            ("◄◄", "PREV",       self.prev_track),       # buttons[3]
-            ("▶",  "PLAY",       self.play_pause_toggle), # buttons[4]
-            ("▶▶", "NEXT",       self.skip_track),        # buttons[5]
-            ("■",  "STOP",       self.stop_playlist),     # buttons[6]
+            ("◄◄", "PREV",  self.prev_track),       # buttons[3]
+            ("▶",  "PLAY",  self.play_pause_toggle), # buttons[4]
+            ("▶▶", "NEXT",  self.skip_track),        # buttons[5]
+            ("■",  "STOP",  self.stop_playlist),     # buttons[6]
         ]
 
         for slot_idx, (symbol, label, cmd) in enumerate(transport_specs, start=3):
@@ -1411,16 +1417,16 @@ class SidTkPlayer:
         return img
 
     def _create_transport_btn(self, parent, symbol, label, cmd, w, h):
-        """Crea un tk.Button in stile Datasette (beige, raised, testo centrato)."""
+        """Crea un tk.Button in stile Datasette scuro con simbolo e testo."""
         btn = tk.Button(
             parent,
             text=f"{symbol}\n{label}",
             font=(self.font_family, 12, "bold"),
-            fg=DATASETTE["TEXT"],
-            bg=DATASETTE["BODY"],
-            activebackground=DATASETTE["PRESSED"],
-            activeforeground=DATASETTE["TEXT"],
-            disabledforeground=DATASETTE["DIS_TXT"],
+            fg=TRANSPORT["TEXT"],
+            bg=TRANSPORT["BTN"],
+            activebackground=TRANSPORT["BTN_ACT"],
+            activeforeground=TRANSPORT["TEXT"],
+            disabledforeground=TRANSPORT["BTN_DIS"],
             relief="raised",
             bd=3,
             cursor="hand2",
@@ -1484,7 +1490,6 @@ class SidTkPlayer:
         btn = self.buttons[4]
         if btn is None:
             return
-        lbl_key = "PLAY"
         if not self.playing:
             btn.config(text="▶\nPLAY",   state=tk.NORMAL)
         elif self.paused:
