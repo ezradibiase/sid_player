@@ -4,6 +4,18 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.0.3] — 2026-05-14
+
+### Modifiche
+- Rimosso completamente `play_time`: il parametro `-t` non viene mai più passato a `sidplayfp`.
+  I brani vengono sempre eseguiti con `-os<N>` (single track mode): la durata è determinata
+  esclusivamente dall'HVSC Songlengths database configurato in `~/.config/sidplayfp/sidplayfp.ini`.
+- Rimosso `play_time` da `Config`, `AudioEngine` e `sidplayer.cfg.example`.
+- Configurato `Songlength Database` in `~/.config/sidplayfp/sidplayfp.ini` con il percorso
+  corretto al file `Songlengths.md5` dell'HVSC.
+
+---
+
 ## [v6.0.2] — 2026-05-13
 
 ### Fix
