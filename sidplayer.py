@@ -18,7 +18,7 @@ import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
 from pathlib import Path
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageFont, ImageTk
 import configparser
 
 # ---------------------------------------------------------------------------
@@ -84,6 +84,19 @@ C64_PALETTE = {
     "GREY": "#777777", "LIGHT_GREEN": "#AAFF66", "LIGHT_BLUE": "#0088FF", "LIGHT_GREY": "#BBBBBB"
 }
 
+DATASETTE = {
+    "PLASTIC": "#C8B99A",   # corpo esterno
+    "BODY":    "#BBA888",   # superficie bottone
+    "HI":      "#DDCFB0",   # luce top-left
+    "SH":      "#7A6848",   # ombra bottom-right
+    "PRESSED": "#A09070",   # bottone premuto
+    "DIS":     "#A89880",   # bottone disabilitato
+    "DIS_TXT": "#706050",   # testo disabilitato
+    "TEXT":    "#1A1208",   # testo/simbolo normale
+    "BORDER":  "#5A4428",   # bordo esterno
+    "GLASS":   "#0D0D0D",   # interno finestrella
+}
+
 
 def get_available_font(preferred_font, fallback_font):
     """Verifica se il font preferito è disponibile nel sistema."""
@@ -113,7 +126,7 @@ class Config:
         },
         'window': {
             'width': '640',
-            'height': '480',
+            'height': '580',
             'resizable': 'false',
         }
     }
@@ -123,29 +136,17 @@ class Config:
         self.config = configparser.ConfigParser()
 
         if not os.path.isabs(self.config_file):
-            # Percorso config standard per ciascuna piattaforma
+            # Posizione canonica per piattaforma — unica, nessun fallback
             if IS_MACOS:
-                user_config_dir = os.path.expanduser("~/Library/Application Support/SIDPlayer")
+                config_dir = os.path.expanduser("~/Library/Application Support/SIDPlayer")
             elif IS_WINDOWS:
-                user_config_dir = os.path.join(
+                config_dir = os.path.join(
                     os.environ.get('APPDATA', os.path.expanduser('~')), 'SIDPlayer')
             else:  # Linux e altri Unix
-                user_config_dir = os.path.expanduser("~/.config/SIDPlayer")
-            user_config_path = os.path.join(user_config_dir, self.config_file)
-            home_config_path = os.path.expanduser(f"~/{self.config_file}")
-
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            script_config_path = os.path.join(script_dir, self.config_file)
-
-            if os.path.exists(user_config_path):
-                self.config_file = user_config_path
-                log_message(f"Config trovata in: {self.config_file} (user)")
-            elif os.path.exists(home_config_path):
-                self.config_file = home_config_path
-                log_message(f"Config trovata in: {self.config_file} (home)")
-            else:
-                self.config_file = script_config_path
-                log_message(f"Config trovata in: {self.config_file} (script)")
+                config_dir = os.path.expanduser("~/.config/SIDPlayer")
+            os.makedirs(config_dir, exist_ok=True)
+            self.config_file = os.path.join(config_dir, self.config_file)
+            log_message(f"Config: {self.config_file}")
 
         self._load_config()
         self._font_family = get_available_font(FONT_FAMILY_DEFAULT, FONT_FALLBACK)
@@ -226,7 +227,7 @@ class Config:
 
     @property
     def window_height(self):
-        return self.getint('window', 'height', 480)
+        return self.getint('window', 'height', 580)
 
     @property
     def window_resizable(self):
@@ -1150,6 +1151,9 @@ class SidTkPlayer:
         # === Audio Engine ===
         self.audio_engine = AudioEngine(initial_volume=0.7)
 
+        # Dizionario per le PhotoImage dei bottoni PIL (evita GC)
+        self._btn_imgs = {}
+
         # ---------------------------------------------------------------
         # UI
         # ---------------------------------------------------------------
@@ -1159,62 +1163,119 @@ class SidTkPlayer:
         for i in range(0, self.config.window_height, 4):
             self.canvas.create_line(0, i, self.config.window_width, i, fill="#111111", width=1)
 
-        # Header
+        # ---------------------------------------------------------------
+        # Header (y=0, h=32)
+        # ---------------------------------------------------------------
         header_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLUE"], height=32)
         header_frame.place(x=0, y=0, width=self.config.window_width)
-        tk.Label(header_frame, text="SIDPLAYER", font=(self.font_family, 18, "bold"),
-                fg=C64_PALETTE["WHITE"], bg=C64_PALETTE["BLUE"]).place(x=20, y=6)
-
-        # Schermo centrale
-        self.screen_frame = tk.Frame(self.canvas, bg=C64_PALETTE["DARK_GREY"], relief="raised", bd=2)
-        self.screen_frame.place(x=24, y=48, width=592, height=100)
-
-        self.label_title = tk.Label(self.screen_frame, text="LOAD & PLAY",
-            font=(self.font_family, 18, "bold"), fg=C64_PALETTE["LIGHT_GREEN"],
-            bg=C64_PALETTE["DARK_GREY"], wraplength=560, justify="center")
-        self.label_title.place(x=16, y=8)
-
-        self.label_stil = tk.Label(self.screen_frame, text="",
-            font=(self.font_family, 10), fg=C64_PALETTE["CYAN"],
-            bg=C64_PALETTE["DARK_GREY"], wraplength=560, justify="center")
-        self.label_stil.place(x=16, y=38)
-
-        self.label_author = tk.Label(self.screen_frame, text="",
-            font=(self.font_family, 10), fg=C64_PALETTE["CYAN"],
-            bg=C64_PALETTE["DARK_GREY"], wraplength=560, justify="center")
-        self.label_author.place(x=16, y=62)
-
-        # Frame per l'immagine del videogioco
-        self.image_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"], relief="flat", bd=0)
-        self.image_frame.place(x=24, y=160, width=592, height=190)
-
-        self.image_container = tk.Frame(self.image_frame, bg=C64_PALETTE["BLACK"])
-        self.image_container.pack(expand=True, fill="both")
-
-        self.image_label = tk.Label(self.image_container, bg=C64_PALETTE["BLACK"])
-        self.image_label.pack(expand=True)
-
-        self.image_source_label = tk.Label(self.image_frame,
-                                          text="",
-                                          font=(self.font_family, 8),
-                                          fg=C64_PALETTE["GREY"],
-                                          bg=C64_PALETTE["BLACK"])
-        self.image_source_label.pack(side="bottom", pady=(0, 2))
+        tk.Label(header_frame, text=f"SIDPLAYER C64 {VERSION}",
+                 font=(self.font_family, 14, "bold"),
+                 fg=C64_PALETTE["WHITE"], bg=C64_PALETTE["BLUE"]).place(x=20, y=6)
 
         # ---------------------------------------------------------------
-        # Controllo volume (tra immagine e pulsanti)
+        # Finestrella Datasette (y=40, h=330)
+        # outer beige, inner scuro
         # ---------------------------------------------------------------
-        vol_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"])
-        vol_frame.place(x=24, y=358, width=592, height=50)
+        outer_frame = tk.Frame(self.canvas,
+                               bg=DATASETTE["PLASTIC"],
+                               relief="ridge", bd=6)
+        outer_frame.place(x=20, y=40, width=600, height=330)
 
-        tk.Label(vol_frame, text="VOL",
-                 font=(self.font_family, 10, "bold"),
+        inner_frame = tk.Frame(outer_frame,
+                               bg=DATASETTE["GLASS"],
+                               relief="sunken", bd=2)
+        inner_frame.place(x=12, y=12, width=576, height=306)
+
+        # Cover frame (sinistra, 180×180)
+        self.cover_frame = tk.Frame(inner_frame, bg=DATASETTE["GLASS"])
+        self.cover_frame.place(x=8, y=8, width=180, height=180)
+
+        self.cover_placeholder = self._make_placeholder_image(180, 180)
+        self.image_label = tk.Label(self.cover_frame,
+                                    image=self.cover_placeholder,
+                                    bg=DATASETTE["GLASS"])
+        self.image_label.place(x=0, y=0, width=180, height=180)
+
+        # Info frame (destra)
+        info_frame = tk.Frame(inner_frame, bg=DATASETTE["GLASS"])
+        info_frame.place(x=204, y=8, width=364, height=290)
+
+        self.label_title = tk.Label(info_frame, text="LOAD & PLAY",
+            font=(self.font_family, 16, "bold"), fg=C64_PALETTE["LIGHT_GREEN"],
+            bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
+        self.label_title.place(x=0, y=0, width=364)
+
+        self.label_stil = tk.Label(info_frame, text="",
+            font=(self.font_family, 9), fg=C64_PALETTE["CYAN"],
+            bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
+        self.label_stil.place(x=0, y=48, width=364)
+
+        self.label_author = tk.Label(info_frame, text="",
+            font=(self.font_family, 10), fg=C64_PALETTE["CYAN"],
+            bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
+        self.label_author.place(x=0, y=70, width=364)
+
+        self.label_released = tk.Label(info_frame, text="",
+            font=(self.font_family, 9), fg=C64_PALETTE["GREY"],
+            bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
+        self.label_released.place(x=0, y=96, width=364)
+
+        self.label_track = tk.Label(info_frame, text="",
+            font=(self.font_family, 9), fg=C64_PALETTE["YELLOW"],
+            bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
+        self.label_track.place(x=0, y=118, width=364)
+
+        self.image_source_label = tk.Label(info_frame, text="",
+            font=(self.font_family, 8), fg=C64_PALETTE["GREY"],
+            bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
+        self.image_source_label.place(x=0, y=140, width=364)
+
+        # ---------------------------------------------------------------
+        # Utility row (y=378, h=36)
+        # [LOAD] [OUT] [ABOUT]  spacer  [VOL label + slider + M]
+        # ---------------------------------------------------------------
+        util_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"])
+        util_frame.place(x=20, y=378, width=600, height=36)
+
+        # Muted state init
+        self._muted = False
+        self._pre_mute_volume = 70
+
+        self.buttons = [None] * 7  # 7 slot totali
+
+        _btn_style = dict(
+            font=(self.font_family, 10, "bold"),
+            fg=C64_PALETTE["BLACK"],
+            bg=C64_PALETTE["LIGHT_BLUE"],
+            activebackground=C64_PALETTE["CYAN"],
+            activeforeground=C64_PALETTE["WHITE"],
+            relief="raised", bd=3, padx=6, pady=2,
+        )
+
+        btn_load = tk.Button(util_frame, text="LOAD", command=self.load_files_dialog, **_btn_style)
+        btn_load.pack(side=tk.LEFT, padx=(0, 4))
+        self.buttons[0] = btn_load
+
+        btn_out = tk.Button(util_frame, text="OUT", command=self.show_audio_output_dialog, **_btn_style)
+        btn_out.pack(side=tk.LEFT, padx=(0, 4))
+        self.buttons[1] = btn_out
+
+        btn_about = tk.Button(util_frame, text="ABOUT", command=self.show_about, **_btn_style)
+        btn_about.pack(side=tk.LEFT, padx=(0, 8))
+        self.buttons[2] = btn_about
+
+        # Spacer
+        tk.Frame(util_frame, bg=C64_PALETTE["BLACK"]).pack(side=tk.LEFT, expand=True, fill="x")
+
+        # Volume
+        tk.Label(util_frame, text="VOL",
+                 font=(self.font_family, 9, "bold"),
                  fg=C64_PALETTE["LIGHT_BLUE"],
-                 bg=C64_PALETTE["BLACK"]).pack(side=tk.LEFT, padx=(0, 6))
+                 bg=C64_PALETTE["BLACK"]).pack(side=tk.LEFT, padx=(0, 4))
 
         self.volume_var = tk.IntVar(value=70)
         self.volume_slider = tk.Scale(
-            vol_frame,
+            util_frame,
             from_=0, to=100,
             orient=tk.HORIZONTAL,
             variable=self.volume_var,
@@ -1225,17 +1286,14 @@ class SidTkPlayer:
             activebackground=C64_PALETTE["CYAN"],
             highlightthickness=0,
             sliderrelief="flat",
-            font=(self.font_family, 9),
-            length=490,
+            font=(self.font_family, 8),
+            length=260,
             showvalue=True,
         )
         self.volume_slider.pack(side=tk.LEFT)
 
-        # Icona mute/unmute
-        self._muted = False
-        self._pre_mute_volume = 70
         self.mute_btn = tk.Button(
-            vol_frame, text="M",
+            util_frame, text="M",
             command=self._toggle_mute,
             font=(self.font_family, 9, "bold"),
             fg=C64_PALETTE["BLACK"],
@@ -1243,43 +1301,43 @@ class SidTkPlayer:
             activebackground=C64_PALETTE["RED"],
             relief="raised", bd=2, padx=4, pady=0,
         )
-        self.mute_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self.mute_btn.pack(side=tk.LEFT, padx=(4, 0))
 
-        # Status bar
-        self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=32)
-        self.status_frame.place(x=0, y=448, width=self.config.window_width)
-        self.status_label = tk.Label(self.status_frame, text="READY. TO PLAY.",
-            font=(self.font_family, 14, "bold"), fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
-        self.status_label.place(x=10, y=6)
+        # ---------------------------------------------------------------
+        # Transport bar (y=422, h=72) — bottoni PIL stile Datasette
+        # ---------------------------------------------------------------
+        transport_outer = tk.Frame(self.canvas,
+                                   bg=DATASETTE["PLASTIC"],
+                                   relief="ridge", bd=4)
+        transport_outer.place(x=20, y=426, width=600, height=100)
 
-        # Pulsanti (sopra la status bar)
-        btn_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLACK"])
-        btn_frame.place(x=24, y=412, width=592, height=32)
+        _btn_w, _btn_h = 120, 56
 
-        self.buttons = []
-        button_config = [
-            ("LOAD",  self.load_files_dialog),          # 0
-            ("PLAY",  self.start_playlist),              # 1
-            ("PAUSE", self.toggle_pause),                # 2
-            ("PREV",  self.prev_track),                  # 3
-            ("NEXT",  self.skip_track),                  # 4
-            ("STOP",  self.stop_playlist),               # 5
-            ("OUT",   self.show_audio_output_dialog),    # 6
-            ("ABOUT", self.show_about),                  # 7
+        transport_specs = [
+            ("◄◄", "PREV",       self.prev_track),       # buttons[3]
+            ("▶",  "PLAY",       self.play_pause_toggle), # buttons[4]
+            ("▶▶", "NEXT",       self.skip_track),        # buttons[5]
+            ("■",  "STOP",       self.stop_playlist),     # buttons[6]
         ]
 
-        for i, (text, cmd) in enumerate(button_config):
-            btn = tk.Button(btn_frame, text=text, command=cmd, font=(self.font_family, 10, "bold"),
-                fg=C64_PALETTE["BLACK"], bg=C64_PALETTE["LIGHT_BLUE"],
-                activebackground=C64_PALETTE["CYAN"], activeforeground=C64_PALETTE["WHITE"],
-                relief="raised", bd=4, padx=5, pady=6, width=7, anchor="center")
-            btn.grid(row=0, column=i, sticky="nsew", padx=2)
-            self.buttons.append(btn)
+        for slot_idx, (symbol, label, cmd) in enumerate(transport_specs, start=3):
+            btn = self._create_transport_btn(transport_outer, symbol, label, cmd, _btn_w, _btn_h)
+            btn.pack(side=tk.LEFT, padx=10, pady=9)
+            self.buttons[slot_idx] = btn
 
-        for i in range(len(button_config)):
-            btn_frame.columnconfigure(i, weight=1)
+        # ---------------------------------------------------------------
+        # Status bar (y=502, h=18)
+        # ---------------------------------------------------------------
+        self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=22)
+        self.status_frame.place(x=0, y=546, width=self.config.window_width)
+        self.status_label = tk.Label(self.status_frame, text="READY. TO PLAY.",
+            font=(self.font_family, 9, "bold"),
+            fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
+        self.status_label.place(x=10, y=2)
 
-        # Stato
+        # ---------------------------------------------------------------
+        # Stato applicazione
+        # ---------------------------------------------------------------
         self.tracks = []
         self.track_subsongs = {}
         self.current_index = -1
@@ -1287,10 +1345,17 @@ class SidTkPlayer:
         self.paused = False
         self.total_tracks = 0
         self.current_image = None
+        self.cover_placeholder  # già inizializzato sopra
 
         if not os.path.exists(self.images_dir):
             debug_print(f"AVVISO: Directory immagini non trovata: {self.images_dir}")
             os.makedirs(self.images_dir, exist_ok=True)
+
+        # Stato iniziale bottoni transport: disabilitati
+        self.buttons[3].config(state=tk.DISABLED)
+        self.buttons[4].config(state=tk.NORMAL)
+        self.buttons[5].config(state=tk.DISABLED)
+        self.buttons[6].config(state=tk.DISABLED)
 
         # Carica automaticamente la playlist se esiste
         self.load_playlist_file()
@@ -1300,7 +1365,149 @@ class SidTkPlayer:
             self.label_stil.config(text="")
             self.label_author.config(text="Click LOAD to select SID files")
 
+        self._show_banner_on_startup()
+
         self.update_status()
+
+    # ------------------------------------------------------------------
+    # PIL button helpers (Datasette style)
+    # ------------------------------------------------------------------
+
+    def _hex_to_rgb(self, hex_color):
+        """Converte un colore hex '#RRGGBB' in tupla (R, G, B)."""
+        h = hex_color.lstrip('#')
+        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+    def _make_btn_bg(self, w, h, state='normal'):
+        """
+        Genera il background PIL RGBA per un transport button Datasette.
+        state: 'normal' | 'pressed' | 'disabled'
+        """
+        img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+
+        border_rgb = self._hex_to_rgb(DATASETTE["BORDER"])
+        if state == 'pressed':
+            body_rgb = self._hex_to_rgb(DATASETTE["PRESSED"])
+        elif state == 'disabled':
+            body_rgb = self._hex_to_rgb(DATASETTE["DIS"])
+        else:
+            body_rgb = self._hex_to_rgb(DATASETTE["BODY"])
+
+        hi_rgb  = self._hex_to_rgb(DATASETTE["HI"])
+        sh_rgb  = self._hex_to_rgb(DATASETTE["SH"])
+
+        # Bordo esterno (2px) con angoli arrotondati
+        draw.rounded_rectangle([0, 0, w-1, h-1], radius=6, fill=border_rgb)
+        # Body interno
+        draw.rounded_rectangle([2, 2, w-3, h-3], radius=5, fill=body_rgb)
+        # Highlight top/left
+        draw.line([(3, 2), (w-4, 2)], fill=hi_rgb, width=1)  # top
+        draw.line([(2, 3), (2, h-4)], fill=hi_rgb, width=1)  # left
+        # Shadow bottom/right
+        draw.line([(3, h-3), (w-4, h-3)], fill=sh_rgb, width=1)  # bottom
+        draw.line([(w-3, 3), (w-3, h-4)], fill=sh_rgb, width=1)  # right
+
+        return img
+
+    def _create_transport_btn(self, parent, symbol, label, cmd, w, h):
+        """Crea un tk.Button in stile Datasette (beige, raised, testo centrato)."""
+        btn = tk.Button(
+            parent,
+            text=f"{symbol}\n{label}",
+            font=(self.font_family, 12, "bold"),
+            fg=DATASETTE["TEXT"],
+            bg=DATASETTE["BODY"],
+            activebackground=DATASETTE["PRESSED"],
+            activeforeground=DATASETTE["TEXT"],
+            disabledforeground=DATASETTE["DIS_TXT"],
+            relief="raised",
+            bd=3,
+            cursor="hand2",
+            width=7,
+            command=cmd,
+        )
+        return btn
+
+    def _make_placeholder_image(self, w, h):
+        """Crea un'immagine placeholder C64-style con PIL."""
+        img = Image.new('RGB', (w, h), '#000000')
+        draw = ImageDraw.Draw(img)
+        # Bordo verde
+        draw.rectangle([0, 0, w-1, h-1], outline='#AAFF66', width=1)
+        # Testo centrato
+        try:
+            font_big  = ImageFont.truetype("/System/Library/Fonts/Supplemental/Courier New.ttf", 22)
+            font_small = ImageFont.truetype("/System/Library/Fonts/Supplemental/Courier New.ttf", 13)
+        except Exception:
+            font_big  = ImageFont.load_default()
+            font_small = font_big
+
+        heart_text = "SID"
+        no_img_text = "NO IMAGE"
+
+        try:
+            bb = draw.textbbox((0, 0), heart_text, font=font_big)
+            tw = bb[2] - bb[0]
+            draw.text(((w - tw) // 2, h // 2 - 26), heart_text, fill='#AAFF66', font=font_big)
+            bb2 = draw.textbbox((0, 0), no_img_text, font=font_small)
+            tw2 = bb2[2] - bb2[0]
+            draw.text(((w - tw2) // 2, h // 2 + 4), no_img_text, fill='#FFFFFF', font=font_small)
+        except Exception:
+            draw.text((w//2 - 20, h//2 - 10), "NO IMG", fill='#AAFF66')
+
+        return ImageTk.PhotoImage(img)
+
+    def _show_banner_on_startup(self):
+        """Mostra sidplayer_banner.png nella finestrella solo all'avvio."""
+        banner_candidates = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "sidplayer_banner.png"),
+            os.path.expanduser("~/Library/Application Support/SIDPlayer/sidplayer_banner.png"),
+        ]
+        for path in banner_candidates:
+            if os.path.exists(path):
+                try:
+                    img = Image.open(path).convert("RGB")
+                    img.thumbnail((180, 180), Image.Resampling.LANCZOS)
+                    self._startup_banner = ImageTk.PhotoImage(img)
+                    self.image_label.config(image=self._startup_banner)
+                except Exception:
+                    pass
+                return
+
+    # ------------------------------------------------------------------
+    # Play/Pause toggle
+    # ------------------------------------------------------------------
+
+    def _update_play_pause_button(self):
+        """Aggiorna testo e simbolo del bottone PLAY/PAUSE (buttons[4])."""
+        btn = self.buttons[4]
+        if btn is None:
+            return
+        lbl_key = "PLAY"
+        if not self.playing:
+            btn.config(text="▶\nPLAY",   state=tk.NORMAL)
+        elif self.paused:
+            btn.config(text="▶\nRESUME", state=tk.NORMAL)
+        else:
+            btn.config(text="⏸\nPAUSE",  state=tk.NORMAL)
+
+    def play_pause_toggle(self):
+        """Bottone PLAY/PAUSE unificato: avvia, mette in pausa o riprende."""
+        if not self.playing:
+            self.start_playlist()
+        elif self.paused:
+            if HAS_PROCESS_PAUSE:
+                self.audio_engine.resume()
+            self.paused = False
+            self._update_play_pause_button()
+            self.update_status()
+        else:
+            if HAS_PROCESS_PAUSE:
+                self.audio_engine.pause()
+            self.paused = True
+            self._update_play_pause_button()
+            self.update_status()
 
     # ------------------------------------------------------------------
     # Volume
@@ -1406,6 +1613,8 @@ class SidTkPlayer:
             track_num = f"{self.current_index+1}/{self.total_tracks}"
             state = "PAUSED" if self.paused else "PLAYING"
             self.status_label.config(text=f"{state} {track_num}  VOL:{vol_pct}%")
+            # Aggiorna anche label_track nella finestrella
+            self.label_track.config(text=f"Track {track_num}")
         elif self.total_tracks > 0:
             self.status_label.config(text=f"{self.total_tracks} files loaded - READY")
         else:
@@ -1642,7 +1851,7 @@ class SidTkPlayer:
         return None, None
 
     def load_and_display_image(self, image_path, source):
-        """Carica e mostra l'immagine ridimensionata con la fonte"""
+        """Carica e mostra l'immagine ridimensionata nella finestrella (cover_frame)."""
         try:
             self.image_label.config(image='', text="")
             self.image_source_label.config(text="")
@@ -1651,8 +1860,8 @@ class SidTkPlayer:
 
             img = Image.open(image_path)
 
-            max_width = 580
-            max_height = 160
+            max_width = 180
+            max_height = 180
 
             width_ratio = max_width / img.width
             height_ratio = max_height / img.height
@@ -1664,16 +1873,16 @@ class SidTkPlayer:
             img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
             self.current_image = ImageTk.PhotoImage(img)
-            self.image_label.config(image=self.current_image)
+            self.image_label.config(image=self.current_image, bg=DATASETTE["GLASS"])
 
             if source:
-                self.image_source_label.config(text=f"Image source: {source}")
+                self.image_source_label.config(text=f"Img: {source}")
 
         except Exception as e:
-            self.image_label.config(text=f"[Error loading image]\n{os.path.basename(image_path)}",
-                                  font=(self.font_family, 8),
-                                  fg=C64_PALETTE["RED"],
-                                  bg=C64_PALETTE["BLACK"])
+            self.image_label.config(text=f"[Err]\n{os.path.basename(image_path)}",
+                                    font=(self.font_family, 8),
+                                    fg=C64_PALETTE["RED"],
+                                    bg=DATASETTE["GLASS"])
             self.image_source_label.config(text="")
 
     # ------------------------------------------------------------------
@@ -1696,12 +1905,11 @@ class SidTkPlayer:
 
         self.playing = True
         self.paused = False
-        self.buttons[0].config(state=tk.DISABLED)          # LOAD
-        self.buttons[1].config(state=tk.DISABLED)          # PLAY
-        self.buttons[2].config(state=tk.NORMAL,  text="PAUSE")  # PAUSE
-        self.buttons[3].config(state=tk.NORMAL)            # PREV
-        self.buttons[4].config(state=tk.NORMAL)            # NEXT
-        self.buttons[5].config(state=tk.NORMAL)            # STOP
+        self.buttons[0].config(state=tk.DISABLED)   # LOAD
+        self.buttons[3].config(state=tk.NORMAL)     # PREV
+        self.buttons[5].config(state=tk.NORMAL)     # NEXT
+        self.buttons[6].config(state=tk.NORMAL)     # STOP
+        self._update_play_pause_button()
         self.play_next_track()
 
     def stop_playlist(self):
@@ -1714,14 +1922,15 @@ class SidTkPlayer:
         self.label_title.config(text="STOPPED", fg=C64_PALETTE["RED"])
         self.label_stil.config(text="")
         self.label_author.config(text="Ready to load new files")
-        self.image_label.config(image='', text="")
+        self.label_released.config(text="")
+        self.label_track.config(text="")
+        self.image_label.config(image=self.cover_placeholder, text="")
         self.image_source_label.config(text="")
-        self.buttons[0].config(state=tk.NORMAL)            # LOAD
-        self.buttons[1].config(state=tk.NORMAL)            # PLAY
-        self.buttons[2].config(state=tk.DISABLED, text="PAUSE")  # PAUSE
-        self.buttons[3].config(state=tk.DISABLED)          # PREV
-        self.buttons[4].config(state=tk.DISABLED)          # NEXT
-        self.buttons[5].config(state=tk.DISABLED)          # STOP
+        self.buttons[0].config(state=tk.NORMAL)     # LOAD
+        self.buttons[3].config(state=tk.DISABLED)   # PREV
+        self.buttons[5].config(state=tk.DISABLED)   # NEXT
+        self.buttons[6].config(state=tk.DISABLED)   # STOP
+        self._update_play_pause_button()
         self.update_status()
 
     def play_next_track(self):
@@ -1733,22 +1942,23 @@ class SidTkPlayer:
             self.label_title.config(text="END OF PLAYLIST", fg=C64_PALETTE["CYAN"])
             self.label_stil.config(text="")
             self.label_author.config(text="All tracks completed")
-            self.image_label.config(image='', text="")
+            self.label_released.config(text="")
+            self.label_track.config(text="")
+            self.image_label.config(image=self.cover_placeholder, text="")
             self.image_source_label.config(text="")
             self.playing = False
             self.paused = False
-            self.buttons[0].config(state=tk.NORMAL)            # LOAD
-            self.buttons[1].config(state=tk.NORMAL)            # PLAY
-            self.buttons[2].config(state=tk.DISABLED, text="PAUSE")  # PAUSE
-            self.buttons[3].config(state=tk.DISABLED)          # PREV
-            self.buttons[4].config(state=tk.DISABLED)          # NEXT
-            self.buttons[5].config(state=tk.DISABLED)          # STOP
+            self.buttons[0].config(state=tk.NORMAL)     # LOAD
+            self.buttons[3].config(state=tk.DISABLED)   # PREV
+            self.buttons[5].config(state=tk.DISABLED)   # NEXT
+            self.buttons[6].config(state=tk.DISABLED)   # STOP
+            self._update_play_pause_button()
             self.update_status()
             return
 
         # Reset pausa all'inizio di ogni nuova traccia
         self.paused = False
-        self.buttons[2].config(text="PAUSE")
+        self._update_play_pause_button()
 
         track_path = self.tracks[self.current_index]
         if not os.path.exists(track_path):
@@ -1777,9 +1987,12 @@ class SidTkPlayer:
             self.label_stil.config(text="", fg=C64_PALETTE["CYAN"])
 
         author_text = f"by {author}" if author else ""
-        if released:
-            author_text += f"  •  {released}"
         self.label_author.config(text=author_text, fg=C64_PALETTE["CYAN"])
+
+        self.label_released.config(text=released if released else "", fg=C64_PALETTE["GREY"])
+
+        track_text = f"Track {self.current_index + 1}/{self.total_tracks}"
+        self.label_track.config(text=track_text, fg=C64_PALETTE["YELLOW"])
 
         self.blink_title()
         self.update_status()
@@ -1787,12 +2000,9 @@ class SidTkPlayer:
         # Mostra placeholder immagine subito (non blocca l'avvio audio)
         self.current_image = None
         self.image_label.config(
-            image='',
-            text="...",
-            font=(self.font_family, 14),
-            fg=C64_PALETTE["DARK_GREY"],
-            bg=C64_PALETTE["BLACK"],
-            justify="center",
+            image=self.cover_placeholder,
+            text="",
+            bg=DATASETTE["GLASS"],
         )
         self.image_source_label.config(text="")
 
@@ -1821,12 +2031,9 @@ class SidTkPlayer:
                     self.load_and_display_image(image_path, image_source)
                 else:
                     self.image_label.config(
-                        image='',
-                        text="Nessuna immagine\ndisponibile",
-                        font=(self.font_family, 14),
-                        fg=C64_PALETTE["DARK_GREY"],
-                        bg=C64_PALETTE["BLACK"],
-                        justify="center",
+                        image=self.cover_placeholder,
+                        text="",
+                        bg=DATASETTE["GLASS"],
                     )
                     self.image_source_label.config(text="")
 
@@ -1847,29 +2054,11 @@ class SidTkPlayer:
             # sidplayfp terminato e stream audio esaurito → prossima traccia
             self.play_next_track()
 
-    def toggle_pause(self):
-        """Alterna pausa/ripresa della traccia corrente."""
-        if not self.playing:
-            return
-        if not self.paused:
-            if HAS_PROCESS_PAUSE:
-                self.audio_engine.pause()
-            self.paused = True
-            self.buttons[2].config(text="RESUME")
-            self.update_status()
-        else:
-            if HAS_PROCESS_PAUSE:
-                self.audio_engine.resume()
-            self.paused = False
-            self.buttons[2].config(text="PAUSE")
-            self.update_status()
-
     def skip_track(self):
         if not self.playing:
             return
         if self.paused:
             self.paused = False
-            self.buttons[2].config(text="PAUSE")
         self.play_next_track()
 
     def prev_track(self):
@@ -1878,7 +2067,6 @@ class SidTkPlayer:
             return
         if self.paused:
             self.paused = False
-            self.buttons[2].config(text="PAUSE")
         # play_next_track farà += 1: per tornare all'indice N-1 impostiamo N-2.
         # Se siamo al primo brano (index=0), max(-1, -2)=-1 → play_next_track
         # riparte da 0 (riascolta il primo brano).
