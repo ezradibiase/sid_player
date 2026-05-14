@@ -102,7 +102,7 @@ TRANSPORT = {
     "BTN":     "#493e39",   # superficie tasto
     "BTN_ACT": "#6b5a52",   # tasto premuto
     "BTN_DIS": "#7a6a62",   # tasto disabilitato
-    "TEXT":    "#b0afb4",   # testo/simbolo sul tasto
+    "TEXT":    "#3a302d",   # testo/simbolo sul tasto
 }
 
 
@@ -1122,7 +1122,7 @@ class SidTkPlayer:
         self.font_family = self.config.font_family
 
         # Imposta la finestra
-        self.master.title(f"SIDPLAYER C64 {VERSION}")
+        self.master.title("SIDPLAYER C64")
         self.master.configure(bg="#C3A774")
         self.master.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.master.resizable(self.config.window_resizable, self.config.window_resizable)
@@ -1174,7 +1174,7 @@ class SidTkPlayer:
         # ---------------------------------------------------------------
         header_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLUE"], height=32)
         header_frame.place(x=0, y=0, width=self.config.window_width)
-        tk.Label(header_frame, text=f"SIDPLAYER C64 {VERSION}",
+        tk.Label(header_frame, text="SIDPLAYER C64",
                  font=(self.font_family, 14, "bold"),
                  fg=C64_PALETTE["WHITE"], bg=C64_PALETTE["BLUE"]).place(x=20, y=6)
 
@@ -1329,7 +1329,7 @@ class SidTkPlayer:
             if w < 10:
                 return
             h = _badge_h
-            col = TRANSPORT["TEXT"]
+            col = "#b0afb4"
 
             # Testo "C= commodore"
             badge_canvas.create_text(10, h // 2, text="C= commodore",
@@ -1367,7 +1367,7 @@ class SidTkPlayer:
         # ---------------------------------------------------------------
         self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=22)
         self.status_frame.place(x=0, y=546, width=self.config.window_width)
-        self.status_label = tk.Label(self.status_frame, text="READY. TO PLAY.",
+        self.status_label = tk.Label(self.status_frame, text="READY. - CLICK LOAD TO PLAY.",
             font=(self.font_family, 9, "bold"),
             fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
         self.status_label.place(x=10, y=2)
@@ -1652,9 +1652,9 @@ class SidTkPlayer:
             # Aggiorna anche label_track nella finestrella
             self.label_track.config(text=f"Track {track_num}")
         elif self.total_tracks > 0:
-            self.status_label.config(text=f"{self.total_tracks} files loaded - READY")
+            self.status_label.config(text=f"{self.total_tracks} files loaded - READY.")
         else:
-            self.status_label.config(text="READY - CLICK LOAD")
+            self.status_label.config(text="READY. - CLICK LOAD TO PLAY.")
 
     # ------------------------------------------------------------------
     # Caricamento file / playlist
