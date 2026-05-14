@@ -1105,6 +1105,92 @@ class AudioEngine:
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Contatore nastro stile Datasette
+# ---------------------------------------------------------------------------
+
+class TapeCounter:
+    """Tre cifre con animazione scorrimento verticale, stile contatore Datasette."""
+    _DIGIT_H = 22
+    _DIGIT_W = 16
+    _PAD     = 4
+    _FG      = "#b0afb4"
+    _BG      = "#000000"
+    _FONT    = ("Courier", 13, "bold")
+    _ANIM_STEPS = 8
+    _ANIM_MS    = 100   # ms per frame → 800 ms animazione totale
+    _TICK_MS    = 2000  # ms per tick (~π×3cm / 4.76cm/s ≈ 1.98s)
+
+    def __init__(self, parent, master_widget):
+        self._master  = master_widget
+        self.value    = 0
+        self._running  = False
+        self._tick_job = None
+        self._anim_job = None
+        w = 3 * self._DIGIT_W + 2 * self._PAD
+        self.canvas = tk.Canvas(parent, width=w, height=self._DIGIT_H,
+                                bg=self._BG, highlightthickness=1,
+                                highlightbackground="#493e39")
+        self._render(0, 0, 1.0)
+
+    def _render(self, old_val, new_val, progress):
+        self.canvas.delete("all")
+        old_s = f"{old_val:03d}"
+        new_s = f"{new_val:03d}"
+        h = self._DIGIT_H
+        for col in range(3):
+            x = self._PAD + col * self._DIGIT_W + self._DIGIT_W // 2
+            od, nd = old_s[col], new_s[col]
+            if od == nd or progress >= 1.0:
+                self.canvas.create_text(x, h // 2, text=nd,
+                                        fill=self._FG, font=self._FONT,
+                                        anchor="center")
+            else:
+                offset = int(progress * h)
+                self.canvas.create_text(x, h // 2 - offset, text=od,
+                                        fill=self._FG, font=self._FONT,
+                                        anchor="center")
+                self.canvas.create_text(x, h // 2 - offset + h, text=nd,
+                                        fill=self._FG, font=self._FONT,
+                                        anchor="center")
+
+    def _animate(self, old_val, new_val, step):
+        if step > self._ANIM_STEPS:
+            self._render(new_val, new_val, 1.0)
+            return
+        self._render(old_val, new_val, step / self._ANIM_STEPS)
+        self._anim_job = self._master.after(
+            self._ANIM_MS, lambda: self._animate(old_val, new_val, step + 1))
+
+    def _tick(self):
+        if not self._running:
+            return
+        old_val    = self.value
+        self.value = (self.value + 1) % 1000
+        self._animate(old_val, self.value, 1)
+        self._tick_job = self._master.after(self._TICK_MS, self._tick)
+
+    def start(self):
+        if not self._running:
+            self._running = True
+            self._tick()
+
+    def pause(self):
+        self._running = False
+        if self._tick_job:
+            self._master.after_cancel(self._tick_job)
+            self._tick_job = None
+
+    def reset(self):
+        self._running = False
+        for job in (self._tick_job, self._anim_job):
+            if job:
+                self._master.after_cancel(job)
+        self._tick_job = self._anim_job = None
+        self.value = 0
+        self._render(0, 0, 1.0)
+
+
 # Player principale
 # ---------------------------------------------------------------------------
 
@@ -1318,31 +1404,21 @@ class SidTkPlayer:
         transport_outer.place(x=20, y=426, width=600, height=100)
 
         # Badge Commodore
-        _badge_h = 30
-        badge_canvas = tk.Canvas(transport_outer, height=_badge_h,
-                                 bg=TRANSPORT["BG"], highlightthickness=0)
-        badge_canvas.pack(fill=tk.X, side=tk.TOP)
+        _badge_col = "#b0afb4"
+        badge_frame = tk.Frame(transport_outer, height=30, bg=TRANSPORT["BG"])
+        badge_frame.pack(fill=tk.X, side=tk.TOP)
+        badge_frame.pack_propagate(False)
 
-        def _draw_badge(event=None):
-            badge_canvas.delete("all")
-            w = badge_canvas.winfo_width()
-            if w < 10:
-                return
-            h = _badge_h
-            col = "#b0afb4"
+        tk.Label(badge_frame, text="C= commodore",
+                 fg=_badge_col, bg=TRANSPORT["BG"],
+                 font=(self.font_family, 13, "bold")).pack(side=tk.LEFT, padx=(10, 0))
 
-            # Testo "C= commodore"
-            badge_canvas.create_text(10, h // 2, text="C= commodore",
-                                     fill=col, font=(self.font_family, 13, "bold"),
-                                     anchor="w")
+        self.tape_counter = TapeCounter(badge_frame, self.master)
+        self.tape_counter.canvas.pack(side=tk.LEFT, expand=True)
 
-            # Barre a spessore decrescente via Unicode block elements
-            bars = "▉▊▋▌▍▎▏"
-            badge_canvas.create_text(w - 10, h // 2, text=bars,
-                                     fill=col, font=("Courier", 16, "bold"),
-                                     anchor="e")
-
-        badge_canvas.bind("<Configure>", _draw_badge)
+        tk.Label(badge_frame, text="▉▊▋▌▍▎▏",
+                 fg=_badge_col, bg=TRANSPORT["BG"],
+                 font=("Courier", 16, "bold")).pack(side=tk.RIGHT, padx=(0, 10))
 
         # Riga bottoni
         btn_row = tk.Frame(transport_outer, bg=TRANSPORT["BG"])
@@ -1532,16 +1608,19 @@ class SidTkPlayer:
         """Bottone PLAY/PAUSE unificato: avvia, mette in pausa o riprende."""
         if not self.playing:
             self.start_playlist()
+            self.tape_counter.start()
         elif self.paused:
             if HAS_PROCESS_PAUSE:
                 self.audio_engine.resume()
             self.paused = False
+            self.tape_counter.start()
             self._update_play_pause_button()
             self.update_status()
         else:
             if HAS_PROCESS_PAUSE:
                 self.audio_engine.pause()
             self.paused = True
+            self.tape_counter.pause()
             self._update_play_pause_button()
             self.update_status()
 
@@ -1952,6 +2031,7 @@ class SidTkPlayer:
         if not self.playing:
             return
         self.audio_engine.stop()
+        self.tape_counter.reset()
         self.playing = False
         self.paused = False
         self.current_index = -1
