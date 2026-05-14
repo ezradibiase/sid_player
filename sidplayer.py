@@ -126,7 +126,7 @@ class Config:
         },
         'window': {
             'width': '640',
-            'height': '520',
+            'height': '580',
             'resizable': 'false',
         }
     }
@@ -136,29 +136,17 @@ class Config:
         self.config = configparser.ConfigParser()
 
         if not os.path.isabs(self.config_file):
-            # Percorso config standard per ciascuna piattaforma
+            # Posizione canonica per piattaforma — unica, nessun fallback
             if IS_MACOS:
-                user_config_dir = os.path.expanduser("~/Library/Application Support/SIDPlayer")
+                config_dir = os.path.expanduser("~/Library/Application Support/SIDPlayer")
             elif IS_WINDOWS:
-                user_config_dir = os.path.join(
+                config_dir = os.path.join(
                     os.environ.get('APPDATA', os.path.expanduser('~')), 'SIDPlayer')
             else:  # Linux e altri Unix
-                user_config_dir = os.path.expanduser("~/.config/SIDPlayer")
-            user_config_path = os.path.join(user_config_dir, self.config_file)
-            home_config_path = os.path.expanduser(f"~/{self.config_file}")
-
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            script_config_path = os.path.join(script_dir, self.config_file)
-
-            if os.path.exists(user_config_path):
-                self.config_file = user_config_path
-                log_message(f"Config trovata in: {self.config_file} (user)")
-            elif os.path.exists(home_config_path):
-                self.config_file = home_config_path
-                log_message(f"Config trovata in: {self.config_file} (home)")
-            else:
-                self.config_file = script_config_path
-                log_message(f"Config trovata in: {self.config_file} (script)")
+                config_dir = os.path.expanduser("~/.config/SIDPlayer")
+            os.makedirs(config_dir, exist_ok=True)
+            self.config_file = os.path.join(config_dir, self.config_file)
+            log_message(f"Config: {self.config_file}")
 
         self._load_config()
         self._font_family = get_available_font(FONT_FAMILY_DEFAULT, FONT_FALLBACK)
@@ -239,7 +227,7 @@ class Config:
 
     @property
     def window_height(self):
-        return self.getint('window', 'height', 520)
+        return self.getint('window', 'height', 580)
 
     @property
     def window_resizable(self):
@@ -1321,7 +1309,7 @@ class SidTkPlayer:
         transport_outer = tk.Frame(self.canvas,
                                    bg=DATASETTE["PLASTIC"],
                                    relief="ridge", bd=4)
-        transport_outer.place(x=20, y=422, width=600, height=72)
+        transport_outer.place(x=20, y=426, width=600, height=100)
 
         _btn_w, _btn_h = 120, 56
 
@@ -1334,18 +1322,18 @@ class SidTkPlayer:
 
         for slot_idx, (symbol, label, cmd) in enumerate(transport_specs, start=3):
             btn = self._create_transport_btn(transport_outer, symbol, label, cmd, _btn_w, _btn_h)
-            btn.pack(side=tk.LEFT, padx=4, pady=6)
+            btn.pack(side=tk.LEFT, padx=10, pady=9)
             self.buttons[slot_idx] = btn
 
         # ---------------------------------------------------------------
         # Status bar (y=502, h=18)
         # ---------------------------------------------------------------
-        self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=18)
-        self.status_frame.place(x=0, y=502, width=self.config.window_width)
+        self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=22)
+        self.status_frame.place(x=0, y=546, width=self.config.window_width)
         self.status_label = tk.Label(self.status_frame, text="READY. TO PLAY.",
             font=(self.font_family, 9, "bold"),
             fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
-        self.status_label.place(x=10, y=1)
+        self.status_label.place(x=10, y=2)
 
         # ---------------------------------------------------------------
         # Stato applicazione
@@ -1376,6 +1364,8 @@ class SidTkPlayer:
             self.label_title.config(text="LOAD & PLAY", fg=C64_PALETTE["LIGHT_GREEN"])
             self.label_stil.config(text="")
             self.label_author.config(text="Click LOAD to select SID files")
+
+        self._show_banner_on_startup()
 
         self.update_status()
 
@@ -1421,31 +1411,22 @@ class SidTkPlayer:
         return img
 
     def _create_transport_btn(self, parent, symbol, label, cmd, w, h):
-        """
-        Crea un tk.Button con background PIL in stile Datasette.
-        Salva le PhotoImage in self._btn_imgs[label] per evitare GC.
-        """
-        normal_pil  = self._make_btn_bg(w, h, 'normal')
-        pressed_pil = self._make_btn_bg(w, h, 'pressed')
-
-        normal_tk  = ImageTk.PhotoImage(normal_pil)
-        pressed_tk = ImageTk.PhotoImage(pressed_pil)
-        self._btn_imgs[label] = {'normal': normal_tk, 'pressed': pressed_tk}
-
+        """Crea un tk.Button in stile Datasette (beige, raised, testo centrato)."""
         btn = tk.Button(
             parent,
-            image=normal_tk,
             text=f"{symbol}\n{label}",
-            compound="center",
-            font=(self.font_family, 9, "bold"),
+            font=(self.font_family, 12, "bold"),
             fg=DATASETTE["TEXT"],
-            bd=0,
-            relief="flat",
+            bg=DATASETTE["BODY"],
+            activebackground=DATASETTE["PRESSED"],
+            activeforeground=DATASETTE["TEXT"],
+            disabledforeground=DATASETTE["DIS_TXT"],
+            relief="raised",
+            bd=3,
             cursor="hand2",
+            width=7,
             command=cmd,
         )
-        btn.bind("<ButtonPress-1>",   lambda e, b=btn, lbl=label: b.config(image=self._btn_imgs[lbl]['pressed']))
-        btn.bind("<ButtonRelease-1>", lambda e, b=btn, lbl=label: b.config(image=self._btn_imgs[lbl]['normal']))
         return btn
 
     def _make_placeholder_image(self, w, h):
@@ -1477,6 +1458,23 @@ class SidTkPlayer:
 
         return ImageTk.PhotoImage(img)
 
+    def _show_banner_on_startup(self):
+        """Mostra sidplayer_banner.png nella finestrella solo all'avvio."""
+        banner_candidates = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "sidplayer_banner.png"),
+            os.path.expanduser("~/Library/Application Support/SIDPlayer/sidplayer_banner.png"),
+        ]
+        for path in banner_candidates:
+            if os.path.exists(path):
+                try:
+                    img = Image.open(path).convert("RGB")
+                    img.thumbnail((180, 180), Image.Resampling.LANCZOS)
+                    self._startup_banner = ImageTk.PhotoImage(img)
+                    self.image_label.config(image=self._startup_banner)
+                except Exception:
+                    pass
+                return
+
     # ------------------------------------------------------------------
     # Play/Pause toggle
     # ------------------------------------------------------------------
@@ -1488,11 +1486,11 @@ class SidTkPlayer:
             return
         lbl_key = "PLAY"
         if not self.playing:
-            btn.config(text="▶\nPLAY",   state=tk.NORMAL, image=self._btn_imgs.get("PLAY", {}).get('normal', ''))
+            btn.config(text="▶\nPLAY",   state=tk.NORMAL)
         elif self.paused:
-            btn.config(text="▶\nRESUME", state=tk.NORMAL, image=self._btn_imgs.get("PLAY", {}).get('normal', ''))
+            btn.config(text="▶\nRESUME", state=tk.NORMAL)
         else:
-            btn.config(text="⏸\nPAUSE",  state=tk.NORMAL, image=self._btn_imgs.get("PLAY", {}).get('normal', ''))
+            btn.config(text="⏸\nPAUSE",  state=tk.NORMAL)
 
     def play_pause_toggle(self):
         """Bottone PLAY/PAUSE unificato: avvia, mette in pausa o riprende."""

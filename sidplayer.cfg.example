@@ -33,7 +33,7 @@ sidplay_cmd = sidplayfp
 [window]
 # Dimensioni della finestra
 width = 640
-height = 520
+height = 560
 
 # La finestra è ridimensionabile? (true/false)
 resizable = false
