@@ -194,16 +194,13 @@ L'app viene creata in `scripts/dist/SIDPlayer.app`.
 
 ### Durata dei brani: come funziona
 
-SIDPlayer usa il flag `-os` di `sidplayfp` (single track mode): ogni brano viene suonato **una volta sola** e poi `sidplayfp` termina automaticamente. La durata viene determinata dall'HVSC Songlengths database configurato in `sidplayfp`.
+SIDPlayer usa il flag `-os` di `sidplayfp` (single track mode): ogni brano viene suonato **una volta sola** e poi `sidplayfp` termina automaticamente in base alla durata registrata nell'HVSC Songlengths database.
 
-Per sfruttare al meglio questa funzionalità, scarica la HVSC completa (vedi sezione STIL) e imposta `Songlengths` nel file di configurazione di `sidplayfp` (`~/.config/sidplayfp/sidplayfp.ini`).
-
-Il parametro `play_time` in `sidplayer.cfg` è un **timeout di emergenza opzionale** per i brani non presenti nel database (che altrimenti looperebbero indefinitamente). Di default è disabilitato:
+Per farlo funzionare correttamente, scarica la HVSC (vedi sezione STIL) e imposta il percorso del database in `~/.config/sidplayfp/sidplayfp.ini`:
 
 ```ini
-[player]
-play_time =        # vuoto = nessun timeout, sidplayfp decide la durata
-# play_time = 5:00 # abilita timeout di 5 minuti come fallback
+[SIDPlayfp]
+Songlength Database = /percorso/a/HVSC/DOCUMENTS/Songlengths.md5
 ```
 
 ### "sidplayfp not found"

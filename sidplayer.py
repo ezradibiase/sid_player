@@ -2,7 +2,7 @@
 """
 SIDPlayer C64-Style con supporto copertine C64 da IGDB e RAWG e STIL
 e controllo volume applicativo indipendente dal volume di sistema
-Versione: v6.0.2 (Cross-platform, silent mode, terminal detach)
+Versione: v6.0.3 (Cross-platform, silent mode, terminal detach)
 Autore: ezrad & IA
 Anno: 2026
 """
@@ -71,7 +71,7 @@ except ImportError:
     HAS_SOUNDDEVICE = False
     log_message("ATTENZIONE: 'sounddevice' non installato - uso riproduzione diretta")
 
-VERSION = "v6.0.2"
+VERSION = "v6.0.3"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
 FONT_FALLBACK = "Courier"
 CONFIG_FILE = "sidplayer.cfg"
@@ -110,7 +110,6 @@ class Config:
         },
         'player': {
             'sidplay_cmd': 'sidplayfp',
-            'play_time': '',
         },
         'window': {
             'width': '640',
@@ -216,10 +215,6 @@ class Config:
     @property
     def sidplay_cmd(self):
         return self.get('player', 'sidplay_cmd')
-
-    @property
-    def play_time(self):
-        return self.get('player', 'play_time').strip()
 
     @property
     def font_family(self):
@@ -789,7 +784,6 @@ class AudioEngine:
         # volume: float 0.0–1.0, scritto dal main thread, letto dal thread audio
         self.volume = initial_volume
         self.output_device = None   # None = device di default del sistema
-        self.play_time = ''         # es. '3:30' → -t3:30; vuoto = nessun limite
         self._stop_event = threading.Event()
         self._thread = None
         self._process = None
@@ -878,8 +872,6 @@ class AudioEngine:
     def _build_cmd(self, sidplay_cmd, subsong, extra_flag, sid_path):
         """Costruisce la lista di argomenti per sidplayfp."""
         cmd = [sidplay_cmd, f"-os{subsong}"]
-        if self.play_time:
-            cmd.append(f"-t{self.play_time}")
         if extra_flag:
             cmd.append(extra_flag)
         cmd.append(sid_path)
@@ -1156,7 +1148,6 @@ class SidTkPlayer:
 
         # === Audio Engine ===
         self.audio_engine = AudioEngine(initial_volume=0.7)
-        self.audio_engine.play_time = self.config.play_time
 
         # ---------------------------------------------------------------
         # UI

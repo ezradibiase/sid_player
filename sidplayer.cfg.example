@@ -27,13 +27,6 @@ igdb_access_token =
 # Comando per riprodurre i file SID
 sidplay_cmd = sidplayfp
 
-# Timeout massimo per brani senza durata nota (formato [mins:]secs, es. 3:30 o 180).
-# sidplayfp usa il flag -os (single track): i brani terminano automaticamente
-# alla durata registrata nell'HVSC Songlengths database, senza bisogno di timeout.
-# Imposta play_time solo come fallback per brani non presenti nel database,
-# altrimenti lascia vuoto (lascia che sidplayfp decida da solo).
-play_time =
-
 # Nota: Il font "C64 Pro Mono" viene usato se installato nel sistema
 # Altrimenti viene usato un font di fallback (Courier)
 
