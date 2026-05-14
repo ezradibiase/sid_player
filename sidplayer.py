@@ -1117,6 +1117,7 @@ class SidTkPlayer:
         self.master.configure(bg=C64_PALETTE["BLACK"])
         self.master.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.master.resizable(self.config.window_resizable, self.config.window_resizable)
+        self.master.protocol("WM_DELETE_WINDOW", self.quit_all)
 
         # API RAWG
         self.rawg_api_key = self.config.rawg_api_key
@@ -1260,15 +1261,15 @@ class SidTkPlayer:
             ("LOAD",  self.load_files_dialog),          # 0
             ("PLAY",  self.start_playlist),              # 1
             ("PAUSE", self.toggle_pause),                # 2
-            ("NEXT",  self.skip_track),                  # 3
-            ("STOP",  self.stop_playlist),               # 4
-            ("OUT",   self.show_audio_output_dialog),    # 5
-            ("ABOUT", self.show_about),                  # 6
-            ("QUIT",  self.quit_all)                     # 7
+            ("PREV",  self.prev_track),                  # 3
+            ("NEXT",  self.skip_track),                  # 4
+            ("STOP",  self.stop_playlist),               # 5
+            ("OUT",   self.show_audio_output_dialog),    # 6
+            ("ABOUT", self.show_about),                  # 7
         ]
 
         for i, (text, cmd) in enumerate(button_config):
-            btn = tk.Button(btn_frame, text=text, command=cmd, font=(self.font_family, 14, "bold"),
+            btn = tk.Button(btn_frame, text=text, command=cmd, font=(self.font_family, 10, "bold"),
                 fg=C64_PALETTE["BLACK"], bg=C64_PALETTE["LIGHT_BLUE"],
                 activebackground=C64_PALETTE["CYAN"], activeforeground=C64_PALETTE["WHITE"],
                 relief="raised", bd=4, padx=5, pady=6, width=7, anchor="center")
@@ -1698,8 +1699,9 @@ class SidTkPlayer:
         self.buttons[0].config(state=tk.DISABLED)          # LOAD
         self.buttons[1].config(state=tk.DISABLED)          # PLAY
         self.buttons[2].config(state=tk.NORMAL,  text="PAUSE")  # PAUSE
-        self.buttons[3].config(state=tk.NORMAL)            # NEXT
-        self.buttons[4].config(state=tk.NORMAL)            # STOP
+        self.buttons[3].config(state=tk.NORMAL)            # PREV
+        self.buttons[4].config(state=tk.NORMAL)            # NEXT
+        self.buttons[5].config(state=tk.NORMAL)            # STOP
         self.play_next_track()
 
     def stop_playlist(self):
@@ -1717,8 +1719,9 @@ class SidTkPlayer:
         self.buttons[0].config(state=tk.NORMAL)            # LOAD
         self.buttons[1].config(state=tk.NORMAL)            # PLAY
         self.buttons[2].config(state=tk.DISABLED, text="PAUSE")  # PAUSE
-        self.buttons[3].config(state=tk.DISABLED)          # NEXT
-        self.buttons[4].config(state=tk.DISABLED)          # STOP
+        self.buttons[3].config(state=tk.DISABLED)          # PREV
+        self.buttons[4].config(state=tk.DISABLED)          # NEXT
+        self.buttons[5].config(state=tk.DISABLED)          # STOP
         self.update_status()
 
     def play_next_track(self):
@@ -1737,8 +1740,9 @@ class SidTkPlayer:
             self.buttons[0].config(state=tk.NORMAL)            # LOAD
             self.buttons[1].config(state=tk.NORMAL)            # PLAY
             self.buttons[2].config(state=tk.DISABLED, text="PAUSE")  # PAUSE
-            self.buttons[3].config(state=tk.DISABLED)          # NEXT
-            self.buttons[4].config(state=tk.DISABLED)          # STOP
+            self.buttons[3].config(state=tk.DISABLED)          # PREV
+            self.buttons[4].config(state=tk.DISABLED)          # NEXT
+            self.buttons[5].config(state=tk.DISABLED)          # STOP
             self.update_status()
             return
 
@@ -1866,6 +1870,19 @@ class SidTkPlayer:
         if self.paused:
             self.paused = False
             self.buttons[2].config(text="PAUSE")
+        self.play_next_track()
+
+    def prev_track(self):
+        """Torna al brano precedente (o risuona il primo se già al primo)."""
+        if not self.playing:
+            return
+        if self.paused:
+            self.paused = False
+            self.buttons[2].config(text="PAUSE")
+        # play_next_track farà += 1: per tornare all'indice N-1 impostiamo N-2.
+        # Se siamo al primo brano (index=0), max(-1, -2)=-1 → play_next_track
+        # riparte da 0 (riascolta il primo brano).
+        self.current_index = max(-1, self.current_index - 2)
         self.play_next_track()
 
     # ------------------------------------------------------------------
