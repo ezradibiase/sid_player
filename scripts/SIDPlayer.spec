@@ -7,6 +7,7 @@ a = Analysis(
     datas=[
         ('../stil_reader.py', '.'),
         ('../sidplayer_banner.png', '.'),
+        ('../ezrad_portrait.png', '.'),
     ],
     hiddenimports=['sounddevice', 'numpy'],
     hookspath=[],
