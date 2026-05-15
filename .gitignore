@@ -1,5 +1,8 @@
 # Credenziali e configurazione utente
 sidplayer.cfg
+
+# Immagine autore (personale)
+ezrad_portrait.png
 playlist.txt
 igdb_credentials.txt
 rawg_api_key.txt

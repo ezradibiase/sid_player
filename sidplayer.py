@@ -1478,7 +1478,7 @@ class SidTkPlayer:
             self.label_stil.config(text="")
             self.label_author.config(text="Click LOAD to select SID files")
 
-        self._show_banner_on_startup()
+        # banner rimosso: la finestrella parte vuota
 
         self.update_status()
 
@@ -2198,105 +2198,86 @@ class SidTkPlayer:
         about_window = tk.Toplevel(self.master)
         about_window.title("About SIDPLAYER")
         about_window.configure(bg=C64_PALETTE["BLACK"])
-        about_window.geometry("420x560")
+        about_window.geometry("460x580")
         about_window.resizable(False, False)
 
         title_label = tk.Label(about_window, text="SIDPLAYER C64",
-                              font=(self.font_family, 24, "bold"),
+                              font=(self.font_family, 22, "bold"),
                               fg=C64_PALETTE["LIGHT_GREEN"],
                               bg=C64_PALETTE["BLACK"])
-        title_label.pack(pady=(15, 5))
+        title_label.pack(pady=(14, 2))
 
         version_label = tk.Label(about_window, text=VERSION,
-                               font=(self.font_family, 14),
+                               font=(self.font_family, 12),
                                fg=C64_PALETTE["CYAN"],
                                bg=C64_PALETTE["BLACK"])
-        version_label.pack(pady=(0, 5))
+        version_label.pack(pady=(0, 10))
 
-        author_label = tk.Label(about_window, text="Author: ezrad & IA",
-                               font=(self.font_family, 12),
-                               fg=C64_PALETTE["WHITE"],
-                               bg=C64_PALETTE["BLACK"])
-        author_label.pack(pady=(0, 15))
-
-        banner_path = None
-        banner_image = None
-
-        possible_paths = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "sidplayer_banner.png"),
-            os.path.expanduser("~/Library/Application Support/SIDPlayer/sidplayer_banner.png"),
-            "sidplayer_banner.png",
+        # Ritratto autore
+        portrait_image = None
+        portrait_paths = [
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ezrad_portrait.png"),
+            os.path.expanduser("~/Library/Application Support/SIDPlayer/ezrad_portrait.png"),
+            "ezrad_portrait.png",
         ]
-
-        for path in possible_paths:
+        for path in portrait_paths:
             if os.path.exists(path):
-                banner_path = path
+                try:
+                    img = Image.open(path).convert("RGBA")
+                    img = img.resize((160, 160), Image.Resampling.LANCZOS)
+                    portrait_image = ImageTk.PhotoImage(img)
+                    portrait_label = tk.Label(about_window, image=portrait_image,
+                                              bg=C64_PALETTE["BLACK"])
+                    portrait_label.image = portrait_image
+                    portrait_label.pack(pady=(5, 6))
+                except Exception as e:
+                    log_message(f"Errore caricamento ritratto: {e}")
                 break
 
-        if banner_path:
-            try:
-                img = Image.open(banner_path)
-                max_width = 320
-                ratio = min(max_width / img.width, 1.0)
-                new_size = (int(img.width * ratio), int(img.height * ratio))
-                img = img.resize(new_size, Image.Resampling.LANCZOS)
-                banner_image = ImageTk.PhotoImage(img)
-
-                banner_label = tk.Label(about_window, image=banner_image, bg=C64_PALETTE["BLACK"])
-                banner_label.image = banner_image
-                banner_label.pack(pady=(5, 10))
-            except Exception as e:
-                log_message(f"Errore caricamento banner: {e}")
-
-        year_label = tk.Label(about_window, text="2026",
-                             font=(self.font_family, 12),
-                             fg=C64_PALETTE["YELLOW"],
-                             bg=C64_PALETTE["BLACK"])
-        year_label.pack(pady=(5, 5))
+        author_label = tk.Label(about_window, text="ezrad & IA  —  2026",
+                               font=(self.font_family, 11),
+                               fg=C64_PALETTE["WHITE"],
+                               bg=C64_PALETTE["BLACK"])
+        author_label.pack(pady=(6, 10))
 
         desc_label = tk.Label(about_window,
-                             text="C64 SID Music Player\nwith STIL subsong titles, cover art & volume control",
+                             text="C64 SID Music Player\nSTIL subsong titles · cover art · volume control",
                              font=(self.font_family, 10),
                              fg=C64_PALETTE["LIGHT_GREY"],
-                             bg=C64_PALETTE["BLACK"])
-        desc_label.pack(pady=(5, 5))
+                             bg=C64_PALETTE["BLACK"],
+                             wraplength=400, justify="center")
+        desc_label.pack(pady=(0, 10))
+
+        # Separatore
+        tk.Frame(about_window, bg=C64_PALETTE["GREY"], height=1).pack(fill=tk.X, padx=40)
 
         if self.stil_reader.loaded:
-            stil_info = f"✓ STIL: {len(self.stil_reader.entries)} entry - subsong titles enabled"
+            stil_info = f"✓  STIL: {len(self.stil_reader.entries):,} entries — subsong titles enabled"
+            stil_fg = C64_PALETTE["LIGHT_GREEN"]
         else:
-            stil_info = "ℹ STIL: non disponibile (usa titoli header SID)"
+            stil_info = "✗  STIL not available — using SID header titles"
+            stil_fg = C64_PALETTE["GREY"]
 
-        stil_label = tk.Label(about_window, text=stil_info,
-                            font=(self.font_family, 9),
-                            fg=C64_PALETTE["LIGHT_GREEN"] if self.stil_reader.loaded else C64_PALETTE["GREY"],
-                            bg=C64_PALETTE["BLACK"])
-        stil_label.pack(pady=(5, 5))
+        tk.Label(about_window, text=stil_info,
+                 font=(self.font_family, 9), fg=stil_fg,
+                 bg=C64_PALETTE["BLACK"],
+                 wraplength=400, justify="center").pack(pady=(8, 2))
 
-        # Info volume engine
-        if HAS_SOUNDDEVICE:
-            vol_info = "✓ Volume control: FIFO + sounddevice (CoreAudio)"
-        else:
-            vol_info = "ℹ Volume control: non disponibile (installa sounddevice)"
+        vol_fg = C64_PALETTE["LIGHT_GREEN"] if HAS_SOUNDDEVICE else C64_PALETTE["GREY"]
+        vol_info = ("✓  Volume control via FIFO + sounddevice" if HAS_SOUNDDEVICE
+                    else "✗  Volume control unavailable — install sounddevice")
+        tk.Label(about_window, text=vol_info,
+                 font=(self.font_family, 9), fg=vol_fg,
+                 bg=C64_PALETTE["BLACK"],
+                 wraplength=400, justify="center").pack(pady=(2, 8))
 
-        vol_label = tk.Label(about_window, text=vol_info,
-                            font=(self.font_family, 9),
-                            fg=C64_PALETTE["LIGHT_GREEN"] if HAS_SOUNDDEVICE else C64_PALETTE["GREY"],
-                            bg=C64_PALETTE["BLACK"])
-        vol_label.pack(pady=(3, 3))
+        # Separatore
+        tk.Frame(about_window, bg=C64_PALETTE["GREY"], height=1).pack(fill=tk.X, padx=40)
 
-        info_label = tk.Label(about_window,
-                             text="Uses SID header metadata for image search",
-                             font=(self.font_family, 8),
-                             fg=C64_PALETTE["GREY"],
-                             bg=C64_PALETTE["BLACK"])
-        info_label.pack(pady=(5, 5))
-
-        contact_label = tk.Label(about_window,
-                                text="github.com/ezradibiase",
-                                font=(self.font_family, 9),
-                                fg=C64_PALETTE["LIGHT_BLUE"],
-                                bg=C64_PALETTE["BLACK"])
-        contact_label.pack(pady=(10, 5))
+        tk.Label(about_window, text="github.com/ezradibiase",
+                 font=(self.font_family, 9),
+                 fg=C64_PALETTE["LIGHT_BLUE"],
+                 bg=C64_PALETTE["BLACK"]).pack(pady=(10, 4))
 
         close_btn = tk.Button(about_window, text="CLOSE",
                              command=about_window.destroy,
@@ -2310,9 +2291,9 @@ class SidTkPlayer:
         about_window.grab_set()
         about_window.focus_set()
 
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (420 // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (560 // 2)
-        about_window.geometry(f"420x560+{x}+{y}")
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (460 // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (580 // 2)
+        about_window.geometry(f"460x580+{x}+{y}")
 
     # ------------------------------------------------------------------
 
