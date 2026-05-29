@@ -20,6 +20,7 @@ Player di file **SID** (Commodore 64) con interfaccia grafica ispirata al Commod
 - Playlist personalizzate con supporto subsong
 - Copertine dei giochi da IGDB e RAWG (opzionale, richiede API key)
 - Supporto STIL per i titoli dei subsong
+- **Now Playing** su macOS: Control Center, Touch Bar, tasti F-media, Siri
 - Funziona su macOS, Linux e Windows
 
 ---
@@ -195,6 +196,21 @@ Per chiudere l'applicazione usa la **✕** del window manager (la finestra salva
 Il pulsante **OUT** apre un popup con tutti i device audio disponibili nel sistema, incluse le casse Bluetooth connesse. Permette di separare l'audio del player dall'audio di sistema.
 
 Il device selezionato viene usato dalla traccia successiva in poi.
+
+### Now Playing (macOS)
+
+Su macOS, SIDPlayer si integra con i controlli multimediali del sistema operativo:
+
+- **Control Center** — mostra titolo e artista del brano in corso nel widget musica
+- **Touch Bar** — appaiono i controlli play/pause, traccia precedente e successiva
+- **Tasti F-media** (F7 / F8 / F9) — controllano la riproduzione
+- **Siri** — può mettere in pausa o riprendere la riproduzione
+
+L'integrazione usa `MPNowPlayingInfoCenter` e `MPRemoteCommandCenter` del framework
+Apple **MediaPlayer**, accessibile tramite PyObjC (già incluso in macOS — nessuna
+dipendenza aggiuntiva richiesta).
+
+Su Linux e Windows la funzionalità è disabilitata silenziosamente.
 
 ---
 

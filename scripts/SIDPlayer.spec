@@ -6,6 +6,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ('../stil_reader.py', '.'),
+        ('../nowplaying_mac.py', '.'),
         ('../sidplayer_banner.png', '.'),
         ('../ezrad_portrait.png', '.'),
     ],
