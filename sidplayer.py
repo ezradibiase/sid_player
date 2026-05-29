@@ -1281,6 +1281,9 @@ class SidTkPlayer:
         )
         if HAS_NOWPLAYING:
             log_message("Now Playing: integrazione macOS attiva")
+            # Placeholder iniziale: evita che MTMR/Control Center mostrino "unknown"
+            # prima che inizi la riproduzione. Viene sovrascritto da update() al play.
+            self.now_playing.update(title="SIDPLAYER C64", artist="", is_playing=False)
 
         # ---------------------------------------------------------------
         # Header (y=0, h=32)
