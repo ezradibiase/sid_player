@@ -33,6 +33,19 @@ HAS_PROCESS_PAUSE = hasattr(signal, 'SIGSTOP')     # False su Windows
 # Import STIL Reader
 from stil_reader import STILReader
 
+# Integrazione macOS Now Playing (Control Center, Touch Bar, tasti media)
+try:
+    from nowplaying_mac import NowPlayingManager, HAS_NOWPLAYING
+except ImportError:
+    HAS_NOWPLAYING = False
+    class NowPlayingManager:   # stub no-op su piattaforme senza il modulo
+        def __init__(self, *a, **kw): pass
+        def update(self, **kw):  pass
+        def set_playing(self):   pass
+        def set_paused(self):    pass
+        def clear(self):         pass
+        def deactivate(self):    pass
+
 # Configura logging su file
 LOG_FILE = "sidplayer_debug.log"
 DEBUG_MODE = False  # Viene impostato da main() se -d è presente
@@ -1256,6 +1269,20 @@ class SidTkPlayer:
         self.canvas.pack()
 
         # ---------------------------------------------------------------
+        # Now Playing (macOS Control Center / Touch Bar)
+        # ---------------------------------------------------------------
+        self.now_playing = NowPlayingManager(
+            master   = self.master,
+            on_play  = self.play_pause_toggle,
+            on_pause = self.play_pause_toggle,
+            on_next  = self.skip_track,
+            on_prev  = self.prev_track,
+            on_stop  = self.stop_playlist,
+        )
+        if HAS_NOWPLAYING:
+            log_message("Now Playing: integrazione macOS attiva")
+
+        # ---------------------------------------------------------------
         # Header (y=0, h=32)
         # ---------------------------------------------------------------
         header_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLUE"], height=32)
@@ -1614,6 +1641,7 @@ class SidTkPlayer:
                 self.audio_engine.resume()
             self.paused = False
             self.tape_counter.start()
+            self.now_playing.set_playing()
             self._update_play_pause_button()
             self.update_status()
         else:
@@ -1621,6 +1649,7 @@ class SidTkPlayer:
                 self.audio_engine.pause()
             self.paused = True
             self.tape_counter.pause()
+            self.now_playing.set_paused()
             self._update_play_pause_button()
             self.update_status()
 
@@ -2032,6 +2061,7 @@ class SidTkPlayer:
             return
         self.audio_engine.stop()
         self.tape_counter.reset()
+        self.now_playing.clear()
         self.playing = False
         self.paused = False
         self.current_index = -1
@@ -2106,6 +2136,10 @@ class SidTkPlayer:
         self.label_author.config(text=author_text, fg=C64_PALETTE["CYAN"])
 
         self.label_released.config(text=released if released else "", fg=C64_PALETTE["GREY"])
+
+        # Aggiorna Now Playing (Control Center / Touch Bar)
+        display_title = stil_title if (stil_title and stil_title != main_title) else main_title
+        self.now_playing.update(title=display_title or "", artist=author or "", is_playing=True)
 
         track_text = f"Track {self.current_index + 1}/{self.total_tracks}"
         self.label_track.config(text=track_text, fg=C64_PALETTE["YELLOW"])
@@ -2393,6 +2427,7 @@ class SidTkPlayer:
     # ------------------------------------------------------------------
 
     def quit_all(self):
+        self.now_playing.deactivate()
         self.audio_engine.stop()
         self.master.destroy()
 
