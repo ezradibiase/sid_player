@@ -46,6 +46,30 @@ except ImportError:
         def clear(self):         pass
         def deactivate(self):    pass
 
+# ---------------------------------------------------------------------------
+# MTMR Touch Bar helper — file condiviso /tmp/.sidplayer_np
+# MTMR legge questo file ogni 2 secondi via shellScriptTitledButton.
+# ---------------------------------------------------------------------------
+_NP_FILE = "/tmp/.sidplayer_np"
+
+def _np_write(artist: str, title: str) -> None:
+    """Scrive il brano in riproduzione nel file condiviso con MTMR."""
+    try:
+        text = f"{artist} – {title}" if artist else title
+        with open(_NP_FILE, "w", encoding="utf-8") as fh:
+            fh.write(text)
+    except Exception:
+        pass
+
+def _np_clear() -> None:
+    """Rimuove il file condiviso (SIDPlayer fermo o uscito)."""
+    try:
+        os.unlink(_NP_FILE)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
 # Configura logging su file
 LOG_FILE = "sidplayer_debug.log"
 DEBUG_MODE = False  # Viene impostato da main() se -d è presente
@@ -2065,6 +2089,7 @@ class SidTkPlayer:
         self.audio_engine.stop()
         self.tape_counter.reset()
         self.now_playing.clear()
+        _np_clear()
         self.playing = False
         self.paused = False
         self.current_index = -1
@@ -2140,9 +2165,10 @@ class SidTkPlayer:
 
         self.label_released.config(text=released if released else "", fg=C64_PALETTE["GREY"])
 
-        # Aggiorna Now Playing (Control Center / Touch Bar)
+        # Aggiorna Now Playing (Control Center / Touch Bar) e file MTMR
         display_title = stil_title if (stil_title and stil_title != main_title) else main_title
         self.now_playing.update(title=display_title or "", artist=author or "", is_playing=True)
+        _np_write(author or "", display_title or "")
 
         track_text = f"Track {self.current_index + 1}/{self.total_tracks}"
         self.label_track.config(text=track_text, fg=C64_PALETTE["YELLOW"])
@@ -2431,6 +2457,7 @@ class SidTkPlayer:
 
     def quit_all(self):
         self.now_playing.deactivate()
+        _np_clear()
         self.audio_engine.stop()
         self.master.destroy()
 
