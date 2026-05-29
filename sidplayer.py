@@ -7,6 +7,7 @@ Autore: ezrad & IA
 Anno: 2026
 """
 
+import atexit
 import os
 import random
 import signal
@@ -69,6 +70,9 @@ def _np_clear() -> None:
         pass
     except Exception:
         pass
+
+# Garantisce la pulizia anche in caso di uscita anomala (crash, SIGTERM, Cmd+Q)
+atexit.register(_np_clear)
 
 # Configura logging su file
 LOG_FILE = "sidplayer_debug.log"
