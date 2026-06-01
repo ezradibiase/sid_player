@@ -1380,6 +1380,40 @@ class SidTkPlayer:
             bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
         self.image_source_label.place(x=0, y=140, width=364)
 
+        # Subsong selector — visibile solo se il file ha più di un subsong
+        self.subsong_frame = tk.Frame(info_frame, bg=DATASETTE["GLASS"])
+        # non viene posizionato (place) finché non serve → invisibile di default
+
+        self.btn_subsong_prev = tk.Label(
+            self.subsong_frame, text="◄",
+            font=(self.font_family, 9, "bold"),
+            fg=C64_PALETTE["LIGHT_GREEN"], bg=DATASETTE["GLASS"],
+            cursor="hand2")
+        self.btn_subsong_prev.pack(side=tk.LEFT, padx=(0, 6))
+        self.btn_subsong_prev.bind("<Button-1>", lambda e: self._change_subsong(-1))
+        self.btn_subsong_prev.bind("<Enter>",
+            lambda e: self.btn_subsong_prev.config(fg=C64_PALETTE["WHITE"]))
+        self.btn_subsong_prev.bind("<Leave>",
+            lambda e: self.btn_subsong_prev.config(fg=C64_PALETTE["LIGHT_GREEN"]))
+
+        self.label_subsong = tk.Label(
+            self.subsong_frame, text="",
+            font=(self.font_family, 9), fg=C64_PALETTE["YELLOW"],
+            bg=DATASETTE["GLASS"], anchor="center")
+        self.label_subsong.pack(side=tk.LEFT, expand=True)
+
+        self.btn_subsong_next = tk.Label(
+            self.subsong_frame, text="►",
+            font=(self.font_family, 9, "bold"),
+            fg=C64_PALETTE["LIGHT_GREEN"], bg=DATASETTE["GLASS"],
+            cursor="hand2")
+        self.btn_subsong_next.pack(side=tk.LEFT, padx=(6, 0))
+        self.btn_subsong_next.bind("<Button-1>", lambda e: self._change_subsong(+1))
+        self.btn_subsong_next.bind("<Enter>",
+            lambda e: self.btn_subsong_next.config(fg=C64_PALETTE["WHITE"]))
+        self.btn_subsong_next.bind("<Leave>",
+            lambda e: self.btn_subsong_next.config(fg=C64_PALETTE["LIGHT_GREEN"]))
+
         # ---------------------------------------------------------------
         # Utility row (y=378, h=36)
         # [LOAD] [OUT] [ABOUT]  spacer  [VOL label + slider + M]
@@ -1515,6 +1549,8 @@ class SidTkPlayer:
         self.playing = False
         self.paused = False
         self.total_tracks = 0
+        self.current_subsong = 1
+        self.total_subsongs = 1
         self.current_image = None
         self.cover_placeholder  # già inizializzato sopra
 
@@ -1772,6 +1808,37 @@ class SidTkPlayer:
         except Exception as e:
             debug_print(f"Error reading SID released from {sid_path}: {e}")
             return ""
+
+    def get_sid_songs(self, sid_path):
+        """Legge il numero di subsong dall'header del file SID (offset 0x0E, 2 byte BE)."""
+        try:
+            with open(sid_path, 'rb') as f:
+                header = f.read(4)
+                if header not in [b'PSID', b'RSID']:
+                    return 1
+                f.seek(0x0E)
+                data = f.read(2)
+                if len(data) < 2:
+                    return 1
+                n = (data[0] << 8) | data[1]
+                return max(1, n)
+        except Exception:
+            return 1
+
+    # ------------------------------------------------------------------
+    # Subsong navigation
+    # ------------------------------------------------------------------
+
+    def _change_subsong(self, delta):
+        """Passa al subsong precedente (delta=-1) o successivo (delta=+1), circolare."""
+        if not self.playing or self.total_subsongs <= 1:
+            return
+        new_sub = ((self.current_subsong - 1 + delta) % self.total_subsongs) + 1
+        self.current_subsong = new_sub
+        self.track_subsongs[self.current_index] = new_sub
+        # Riavvia la traccia corrente con il nuovo subsong
+        self.current_index -= 1
+        self.play_next_track()
 
     # ------------------------------------------------------------------
     # UI helpers
@@ -2097,6 +2164,9 @@ class SidTkPlayer:
         self.playing = False
         self.paused = False
         self.current_index = -1
+        self.current_subsong = 1
+        self.total_subsongs = 1
+        self.subsong_frame.place_forget()
         self.label_title.config(text="STOPPED", fg=C64_PALETTE["RED"])
         self.label_stil.config(text="")
         self.label_author.config(text="Ready to load new files")
@@ -2144,6 +2214,8 @@ class SidTkPlayer:
             return
 
         subsong = self.track_subsongs.get(self.current_index, 1)
+        self.current_subsong = subsong
+        self.total_subsongs = self.get_sid_songs(track_path)
 
         # Metadata SID
         header_title = self.get_sid_title(track_path)
@@ -2176,6 +2248,14 @@ class SidTkPlayer:
 
         track_text = f"Track {self.current_index + 1}/{self.total_tracks}"
         self.label_track.config(text=track_text, fg=C64_PALETTE["YELLOW"])
+
+        # Subsong selector: mostra solo se il file ha più subsong
+        if self.total_subsongs > 1:
+            self.label_subsong.config(
+                text=f"Subsong  {self.current_subsong} / {self.total_subsongs}")
+            self.subsong_frame.place(x=0, y=162, width=364, height=22)
+        else:
+            self.subsong_frame.place_forget()
 
         self.blink_title()
         self.update_status()
