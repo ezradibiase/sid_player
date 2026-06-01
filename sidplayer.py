@@ -685,7 +685,9 @@ class IGDBGameImages:
             'Accept': 'application/json',
         }
         limit = 10 if c64_only else 5
-        body = f'fields name, cover.*, platforms.*; search "{game_name}"; limit {limit};'
+        # Se c64_only=True, filtra server-side per platform C64 (id=15)
+        where_clause = 'where platforms = (15); ' if c64_only else ''
+        body = f'fields name, cover.*, platforms.*; search "{game_name}"; {where_clause}limit {limit};'
 
         try:
             debug_print(f"IGDB query: '{game_name}' (c64_only={c64_only})")
@@ -751,18 +753,28 @@ class IGDBGameImages:
             return None
 
     def get_cover_url(self, cover_data):
-        """Costruisce l'URL della copertina da IGDB"""
+        """
+        Costruisce l'URL della copertina da IGDB.
+        cover_data può essere:
+          - dict con 'image_id' (query cover.* completo)
+          - int (solo ID del record cover, richiede /covers endpoint)
+        """
         if not cover_data:
             return None
 
-        if isinstance(cover_data, int):
-            image_id = cover_data
-        elif isinstance(cover_data, dict) and 'image_id' in cover_data:
+        # Se è un oggetto cover completo con image_id
+        if isinstance(cover_data, dict) and 'image_id' in cover_data:
             image_id = cover_data['image_id']
-        else:
+            return f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg"
+
+        # Se è solo l'ID intero del record cover, accetta per compatibilità
+        # (sebbene non sia ideale, la query dovrebbe espandere cover.*)
+        if isinstance(cover_data, int):
+            debug_print(f"IGDB: cover restituito come ID intero ({cover_data}), non come oggetto espanso. Query subottimale?")
+            # Non possiamo costruire URL senza image_id — richiederebbe altra query
             return None
 
-        return f"https://images.igdb.com/igdb/image/upload/t_cover_big/{image_id}.jpg"
+        return None
 
     def download_game_image(self, game_name, sid_filename=None):
         """Scarica la COPERTINA del gioco C64 da IGDB."""
