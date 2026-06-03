@@ -2256,7 +2256,8 @@ class SidTkPlayer:
         # Aggiorna Now Playing (Control Center / Touch Bar) e file MTMR
         display_title = stil_title if (stil_title and stil_title != main_title) else main_title
         self.now_playing.update(title=display_title or "", artist=author or "", is_playing=True)
-        _np_write(author or "", display_title or "")
+        # MTMR mostra sempre il nome del gioco (main_title), GUI mostra subsong se disponibile
+        _np_write(author or "", main_title or "")
 
         track_text = f"Track {self.current_index + 1}/{self.total_tracks}"
         self.label_track.config(text=track_text, fg=C64_PALETTE["YELLOW"])
