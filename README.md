@@ -189,6 +189,19 @@ Il pannello centrale, ispirato alla finestrella trasparente del Datasette, mostr
 | **▶▶ NEXT** | Passa alla traccia successiva |
 | **■ STOP** | Ferma la riproduzione |
 
+### Navigazione subsong
+
+I file SID possono contenere più tracce (subsong). Durante la riproduzione, se il file ha più subsong, appare una riga con:
+
+```
+◄  Subsong  N / M  ►
+```
+
+- **◄ / ►** — passa al subsong precedente/successivo (circolare)
+- **N / M** — subsong corrente su totale
+
+Il subsong viene ricaricato istantaneamente senza perdere la posizione in playlist. La riga scompare quando si ferma la riproduzione o se il file contiene un solo subsong.
+
 Per chiudere l'applicazione usa la **✕** del window manager (la finestra salva lo stato correttamente).
 
 ### Selezione output audio
