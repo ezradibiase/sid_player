@@ -110,6 +110,10 @@ images_dir = ~/Pictures/SIDPlayer
 # File playlist caricato automaticamente all'avvio
 playlist_file = playlist.txt
 
+# Root locale della collezione HVSC, necessaria solo per playlist con
+# path HVSC-relativi (vedi sezione Playlist)
+hvsc_root =
+
 # Percorso STIL.txt (lascia vuoto per ricerca automatica)
 stil_path =
 
@@ -157,9 +161,36 @@ Crea un file di testo con un file SID per riga:
 ~/Music/SID/Hubbard_Rob/International_Karate.sid:1
 ```
 
-Il numero dopo i due punti specifica il **subsong** (traccia). Se omesso, usa la traccia 1.
+Il numero dopo i due punti specifica il **subsong** (traccia). Se omesso, viene letta la subsong di default dichiarata nell'header del file SID stesso (non necessariamente la 1).
 
 Per usare una playlist come default all'avvio, imposta `playlist_file` in `sidplayer.cfg`.
+
+### Playlist in formato standard HVSC
+
+SIDPlayer riconosce anche il formato usato dalle liste ufficiali HVSC (es. [Top100 di LaLa](https://www.hvsc.c64.org/)), dove i file sono elencati con path **relativi alla root della collezione**, senza indicazione di subsong:
+
+```
+/Galway_Martin/Wizball.sid
+/Daglish_Ben/Last_Ninja.sid
+```
+
+Sono supportati anche i file con numerazione di posizione (formato "ranked"), es.:
+
+```
+  1. /Galway_Martin/Wizball.sid
+  2. /Daglish_Ben/Last_Ninja.sid
+```
+
+Per farli funzionare, imposta `hvsc_root` in `sidplayer.cfg` con il percorso della tua copia locale della collezione HVSC:
+
+```ini
+[paths]
+hvsc_root = ~/Music/C64Music
+```
+
+Un path HVSC-relativo viene risolto contro `hvsc_root` solo se non esiste già come path assoluto sul filesystem, quindi le playlist con path assoluti esistenti continuano a funzionare invariate.
+
+> **Nota**: la struttura delle cartelle HVSC è cambiata nel tempo (versioni più recenti nidificano gli autori sotto `MUSICIANS/<lettera>/`). Le liste storiche come i vecchi Top100 potrebbero non combaciare con una copia HVSC recente senza adattare i path.
 
 ---
 
