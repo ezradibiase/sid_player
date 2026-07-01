@@ -10,6 +10,7 @@ Anno: 2026
 import atexit
 import os
 import random
+import re
 import signal
 import struct
 import subprocess
@@ -164,6 +165,7 @@ class Config:
             'images_dir': '~/Pictures/SIDPlayer',
             'playlist_file': 'playlist.txt',
             'stil_path': '~/Music/C64Music/STIL.txt',  # Percorso opzionale per STIL.txt
+            'hvsc_root': '',  # Root locale della collezione HVSC, per playlist con path HVSC-relativi
         },
         'api': {
             'rawg_api_key': '',
@@ -246,6 +248,13 @@ class Config:
     @property
     def stil_path(self):
         path = self.get('paths', 'stil_path')
+        if not path:
+            return None
+        return os.path.expanduser(os.path.expandvars(path))
+
+    @property
+    def hvsc_root(self):
+        path = self.get('paths', 'hvsc_root')
         if not path:
             return None
         return os.path.expanduser(os.path.expandvars(path))
@@ -1257,6 +1266,7 @@ class SidTkPlayer:
         # Imposta le proprietà dalla configurazione
         self.images_dir = self.config.images_dir
         self.playlist_file = self.config.playlist_file
+        self.hvsc_root = self.config.hvsc_root
         self.sidplay_cmd = self.config.sidplay_cmd
         self.font_family = self.config.font_family
 
@@ -1837,6 +1847,25 @@ class SidTkPlayer:
         except Exception:
             return 1
 
+    def get_sid_default_song(self, sid_path):
+        """Legge la subsong di default dall'header del file SID (offset 0x10, 2 byte BE)."""
+        try:
+            with open(sid_path, 'rb') as f:
+                header = f.read(4)
+                if header not in [b'PSID', b'RSID']:
+                    return 1
+                f.seek(0x10)
+                data = f.read(2)
+                if len(data) < 2:
+                    return 1
+                start_song = (data[0] << 8) | data[1]
+                songs = self.get_sid_songs(sid_path)
+                if start_song < 1 or start_song > songs:
+                    return 1
+                return start_song
+        except Exception:
+            return 1
+
     # ------------------------------------------------------------------
     # Subsong navigation
     # ------------------------------------------------------------------
@@ -2004,20 +2033,34 @@ class SidTkPlayer:
         self.tracks = []
         self.track_subsongs = {}
 
+        rank_prefix = re.compile(r'^\d+\.\s+')
+
         for i, entry in enumerate(expanded):
+            # Formato "ranked" delle liste ufficiali HVSC, es. "  1. /Autore/Titolo.sid"
+            entry = rank_prefix.sub('', entry)
+
             if ':' in entry:
                 parts = entry.rsplit(':', 1)
                 file_path = parts[0]
                 try:
                     subsong = int(parts[1])
                 except ValueError:
-                    subsong = 1
+                    subsong = None
             else:
                 file_path = entry
-                subsong = 1
+                subsong = None
+
+            # Path HVSC-relativo (es. "/Autore/Titolo.sid"): risolvi contro hvsc_root
+            # solo se il path assoluto letterale non esiste già sul filesystem
+            if not os.path.exists(file_path) and self.hvsc_root and file_path.startswith('/'):
+                hvsc_path = os.path.join(self.hvsc_root, file_path.lstrip('/'))
+                if os.path.exists(hvsc_path):
+                    file_path = hvsc_path
 
             if os.path.exists(file_path):
                 self.tracks.append(file_path)
+                if subsong is None:
+                    subsong = self.get_sid_default_song(file_path)
                 self.track_subsongs[len(self.tracks) - 1] = subsong
 
         self.total_tracks = len(self.tracks)
