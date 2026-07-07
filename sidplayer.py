@@ -113,7 +113,7 @@ except ImportError:
     HAS_SOUNDDEVICE = False
     log_message("ATTENZIONE: 'sounddevice' non installato - uso riproduzione diretta")
 
-VERSION = "v6.1"
+VERSION = "v6.2"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
 FONT_FALLBACK = "Courier"
 CONFIG_FILE = "sidplayer.cfg"
@@ -127,7 +127,7 @@ C64_PALETTE = {
 }
 
 DATASETTE = {
-    "PLASTIC": "#C8B99A",   # corpo esterno
+    "PLASTIC": "#C0BA99",   # corpo esterno
     "BODY":    "#BBA888",   # superficie bottone
     "HI":      "#DDCFB0",   # luce top-left
     "SH":      "#7A6848",   # ombra bottom-right
@@ -137,6 +137,8 @@ DATASETTE = {
     "TEXT":    "#1A1208",   # testo/simbolo normale
     "BORDER":  "#5A4428",   # bordo esterno
     "GLASS":   "#0D0D0D",   # interno finestrella
+    "BEZEL":   "#989BAC",   # cornice sottile, bezel metallico sportello cassetta
+    "SLOT":    "#4B4B5D",   # cornice incavo vano cassetta, sui 4 lati
 }
 
 TRANSPORT = {
@@ -1278,7 +1280,7 @@ class SidTkPlayer:
 
         # Imposta la finestra
         self.master.title("SIDPLAYER C64")
-        self.master.configure(bg="#C3A774")
+        self.master.configure(bg=DATASETTE["PLASTIC"])
         self.master.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.master.resizable(self.config.window_resizable, self.config.window_resizable)
         self.master.protocol("WM_DELETE_WINDOW", self.quit_all)
@@ -1321,7 +1323,7 @@ class SidTkPlayer:
         # UI
         # ---------------------------------------------------------------
         self.canvas = tk.Canvas(master, width=self.config.window_width, height=self.config.window_height,
-                                bg="#C3A774", highlightthickness=0)
+                                bg=DATASETTE["PLASTIC"], highlightthickness=0)
         self.canvas.pack()
 
         # ---------------------------------------------------------------
@@ -1355,14 +1357,18 @@ class SidTkPlayer:
         # outer beige, inner scuro
         # ---------------------------------------------------------------
         outer_frame = tk.Frame(self.canvas,
-                               bg=DATASETTE["PLASTIC"],
-                               relief="ridge", bd=6)
+                               bg=DATASETTE["BEZEL"],
+                               highlightthickness=2,
+                               highlightbackground=DATASETTE["BEZEL"],
+                               highlightcolor=DATASETTE["BEZEL"])
         outer_frame.place(x=20, y=40, width=600, height=330)
 
         inner_frame = tk.Frame(outer_frame,
                                bg=DATASETTE["GLASS"],
-                               relief="sunken", bd=2)
-        inner_frame.place(x=12, y=12, width=576, height=306)
+                               highlightthickness=5,
+                               highlightbackground=DATASETTE["SLOT"],
+                               highlightcolor=DATASETTE["SLOT"])
+        inner_frame.place(x=5, y=5, width=586, height=316)
 
         # Cover frame (sinistra, 180×180)
         self.cover_frame = tk.Frame(inner_frame, bg=DATASETTE["GLASS"])
@@ -1442,11 +1448,30 @@ class SidTkPlayer:
         self.btn_subsong_next.bind("<Leave>",
             lambda e: self.btn_subsong_next.config(fg=C64_PALETTE["LIGHT_GREEN"]))
 
+        # Decorazione "AUTO STOP", centrata sull'intera finestrella, sopra il bordo
+        # inferiore di inner_frame — creata per ultima cosi' resta in primo piano
+        # rispetto a info_frame (altrimenti verrebbe coperta, essendo suo fratello
+        # creato prima nello stesso genitore inner_frame)
+        # Freccia stile Datasette: allineata dal secondo gambo della "U" (AUTO)
+        # a poco prima della fine della "O" (STOP), appena sopra il testo
+        autostop_canvas = tk.Canvas(inner_frame, width=100, height=50,
+                                     bg=DATASETTE["GLASS"], highlightthickness=0)
+        autostop_canvas.place(x=242, y=235)
+        autostop_canvas.create_line(10, 30, 10, 40, 85, 40, 55, 22, 55, 30, 10, 30,
+                                     fill=C64_PALETTE["LIGHT_GREY"], width=2,
+                                     joinstyle=tk.ROUND, capstyle=tk.ROUND)
+
+        autostop_label = tk.Label(inner_frame, text="AUTO  STOP",
+                 font=(self.font_family, 11, "bold"),
+                 fg=C64_PALETTE["LIGHT_GREY"], bg=DATASETTE["GLASS"],
+                 justify=tk.CENTER, anchor="center")
+        autostop_label.place(x=0, y=278, width=576, height=20)
+
         # ---------------------------------------------------------------
         # Utility row (y=378, h=36)
         # [LOAD] [OUT] [ABOUT]  spacer  [VOL label + slider + M]
         # ---------------------------------------------------------------
-        util_frame = tk.Frame(self.canvas, bg="#C3A774")
+        util_frame = tk.Frame(self.canvas, bg=DATASETTE["PLASTIC"])
         util_frame.place(x=20, y=378, width=600, height=36)
 
         # Muted state init
@@ -1479,20 +1504,20 @@ class SidTkPlayer:
         self.btn_shuffle = tk.Label(
             util_frame, text="",
             font=(self.font_family, 10, "bold"),
-            bg="#C3A774", relief="raised", bd=3, padx=6, pady=2,
+            bg=DATASETTE["PLASTIC"], relief="raised", bd=3, padx=6, pady=2,
         )
         self.btn_shuffle.pack(side=tk.LEFT, padx=(0, 8))
         self.btn_shuffle.bind("<Button-1>", lambda e: self._toggle_shuffle())
         self._update_shuffle_button()
 
         # Spacer
-        tk.Frame(util_frame, bg="#C3A774").pack(side=tk.LEFT, expand=True, fill="x")
+        tk.Frame(util_frame, bg=DATASETTE["PLASTIC"]).pack(side=tk.LEFT, expand=True, fill="x")
 
         # Volume
         tk.Label(util_frame, text="VOL",
                  font=(self.font_family, 9, "bold"),
                  fg=C64_PALETTE["DARK_GREY"],
-                 bg="#C3A774").pack(side=tk.LEFT, padx=(0, 4))
+                 bg=DATASETTE["PLASTIC"]).pack(side=tk.LEFT, padx=(0, 4))
 
         self.volume_var = tk.IntVar(value=70)
         self.volume_slider = tk.Scale(
@@ -1501,7 +1526,7 @@ class SidTkPlayer:
             orient=tk.HORIZONTAL,
             variable=self.volume_var,
             command=self._on_volume_change,
-            bg="#C3A774",
+            bg=DATASETTE["PLASTIC"],
             fg=C64_PALETTE["DARK_GREY"],
             troughcolor=C64_PALETTE["GREY"],
             activebackground=C64_PALETTE["CYAN"],
@@ -1534,7 +1559,7 @@ class SidTkPlayer:
 
         # Badge Commodore
         _badge_col = "#b0afb4"
-        badge_frame = tk.Frame(transport_outer, height=30, bg=TRANSPORT["BG"])
+        badge_frame = tk.Frame(transport_outer, height=34, bg=TRANSPORT["BG"])
         badge_frame.pack(fill=tk.X, side=tk.TOP)
         badge_frame.pack_propagate(False)
 
@@ -1542,8 +1567,15 @@ class SidTkPlayer:
                  fg=_badge_col, bg=TRANSPORT["BG"],
                  font=(self.font_family, 13, "bold")).pack(side=tk.LEFT, padx=(10, 0))
 
-        self.tape_counter = TapeCounter(badge_frame, self.master)
-        self.tape_counter.canvas.pack(side=tk.LEFT, expand=True)
+        counter_frame = tk.Frame(badge_frame, bg=TRANSPORT["BG"])
+        counter_frame.pack(side=tk.LEFT, expand=True)
+
+        self.tape_counter = TapeCounter(counter_frame, self.master)
+        self.tape_counter.canvas.pack(side=tk.TOP)
+
+        tk.Label(counter_frame, text="COUNTER",
+                 fg=_badge_col, bg=TRANSPORT["BG"],
+                 font=(self.font_family, 6, "bold")).pack(side=tk.TOP)
 
         tk.Label(badge_frame, text="▉▊▋▌▍▎▏",
                  fg=_badge_col, bg=TRANSPORT["BG"],
