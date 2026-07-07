@@ -2,7 +2,7 @@
 
 Player di file **SID** (Commodore 64) con interfaccia grafica ispirata al Commodore Datasette, supporto copertine dei giochi e playlist personalizzate.
 
-![Version](https://img.shields.io/badge/version-v6.1-blue)
+![Version](https://img.shields.io/badge/version-v6.2-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 
@@ -205,6 +205,10 @@ Il pannello centrale, ispirato alla finestrella trasparente del Datasette, mostr
 - **Cover del gioco** (da IGDB o RAWG) a sinistra
 - **Titolo**, subtitle STIL, **autore**, anno di rilascio e numero traccia a destra
 - Il banner dell'applicazione viene mostrato prima che inizi la riproduzione
+- Cornice esterna e incavo interno colorati per richiamare il bezel metallico e lo
+  sportello della cassetta del Datasette originale, con decorazione "AUTO STOP" sotto la cover
+- Il badge Commodore nella barra di trasporto include un contatore a 3 cifre con
+  etichetta **COUNTER**, in stile Datasette
 
 ### Bottoni utility
 

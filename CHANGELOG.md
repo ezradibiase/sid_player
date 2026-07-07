@@ -4,6 +4,40 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.2] — 2026-07-07
+
+### Aggiunto
+- **Subsong selector nell'interfaccia**: frecce ◄ / ► per passare al subsong precedente/successivo
+  durante la riproduzione, senza perdere la posizione in playlist.
+- **Supporto playlist in formato standard HVSC**: path HVSC-relativi (es. `/Autore/Titolo.sid`),
+  incluso il formato "ranked" con prefisso di posizione; nuova opzione `hvsc_root` in
+  `sidplayer.cfg`. Quando una riga non specifica il subsong, viene letto il default song
+  dichiarato nell'header del file SID (offset `0x10`) invece di forzare sempre la subsong 1.
+- **Shuffle opzionale**: nuovo bottone **SHUF** per attivare/disattivare l'ordine casuale
+  della playlist a runtime; opzione `shuffle` in `sidplayer.cfg` (default `true`).
+- **Integrazione macOS Now Playing**: Control Center, Touch Bar, tasti F-media (F7/F8/F9)
+  e Siri tramite il framework `MediaPlayer` (PyObjC), senza dipendenze aggiuntive.
+- **Integrazione MTMR Touch Bar**: nome del gioco sempre visibile via file condiviso
+  (`/tmp/.sidplayer_np`), indipendentemente dal subsong in riproduzione.
+- Ritratto autore nella schermata **ABOUT**.
+- Decorazione **"AUTO STOP"** con freccia stilizzata sotto la cover art, e etichetta
+  **COUNTER** sotto le cifre del contatore nel badge Commodore.
+
+### Modifiche
+- **Restyling estetico della finestrella**: cornice esterna (bezel) e incavo interno
+  ricalibrati con colori campionati da una foto reale del Datasette VC-1530, per
+  richiamare più fedelmente il bezel metallico e lo sportello della cassetta.
+- Filtro IGDB per le copertine ora applicato **server-side** (`where platforms = (15)`),
+  con gestione più robusta dei formati di risposta cover.
+- README aggiornato con nota di supporto **beta** per Linux/Windows.
+
+### Fix
+- Risolto crash `SIGABRT` nell'integrazione Now Playing (`PyEval_RestoreThread` con
+  `tstate` nullo) dovuto a callback `MPRemoteCommandCenter` su thread ObjC arbitrari.
+- Pulizia del file temporaneo MTMR garantita anche in caso di uscita anomala.
+
+---
+
 ## [v6.1] — 2026-05-14
 
 ### Aggiunto
