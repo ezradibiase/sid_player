@@ -4,6 +4,7 @@ Script per creare un'icona Commodore C= base in formato PNG.
 L'immagine generata può essere convertita in .icns usando create_icns.sh
 """
 
+import os
 from PIL import Image, ImageDraw
 
 # Crea un'immagine 512x512 con sfondo blu C64
@@ -43,9 +44,10 @@ draw.line([(cx + 40, cy + line_y_offset),
            (cx + 40 + line_length, cy + line_y_offset)], 
           fill=logo_color, width=line_thickness//2)
 
-# Salva l'immagine
-output_file = "commodore.png"
+# Salva l'immagine in assets/, indipendentemente dalla cwd di lancio
+assets_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "assets")
+output_file = os.path.join(assets_dir, "commodore.png")
 img.save(output_file, 'PNG')
 print(f"✓ Icona creata: {output_file} ({img_size}x{img_size})")
 print(f"  Ora puoi convertirla in .icns con:")
-print(f"  ./create_icns.sh")
+print(f"  scripts/create_icns.sh")
