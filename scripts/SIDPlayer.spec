@@ -7,7 +7,6 @@ a = Analysis(
     datas=[
         ('../stil_reader.py', '.'),
         ('../nowplaying_mac.py', '.'),
-        ('../sidplayer_banner.png', '.'),
         ('../ezrad_portrait.png', '.'),
     ],
     hiddenimports=['sounddevice', 'numpy'],
@@ -39,7 +38,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['../commodore.icns'],
+    icon=['../assets/commodore.icns'],
 )
 import subprocess, os
 
@@ -48,7 +47,7 @@ APP_VERSION = '6.2'
 app = BUNDLE(
     exe,
     name='SIDPlayer.app',
-    icon='../commodore.icns',
+    icon='../assets/commodore.icns',
     bundle_identifier='com.ezrad.sidplayer',
     version=APP_VERSION,
     info_plist={
