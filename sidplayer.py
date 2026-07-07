@@ -174,6 +174,7 @@ class Config:
         },
         'player': {
             'sidplay_cmd': 'sidplayfp',
+            'shuffle': 'true',
         },
         'window': {
             'width': '640',
@@ -274,6 +275,10 @@ class Config:
     @property
     def sidplay_cmd(self):
         return self.get('player', 'sidplay_cmd')
+
+    @property
+    def shuffle(self):
+        return self.getboolean('player', 'shuffle', True)
 
     @property
     def font_family(self):
@@ -1268,6 +1273,7 @@ class SidTkPlayer:
         self.playlist_file = self.config.playlist_file
         self.hvsc_root = self.config.hvsc_root
         self.sidplay_cmd = self.config.sidplay_cmd
+        self.shuffle = self.config.shuffle
         self.font_family = self.config.font_family
 
         # Imposta la finestra
@@ -1469,6 +1475,15 @@ class SidTkPlayer:
         btn_about = tk.Button(util_frame, text="ABOUT", command=self.show_about, **_btn_style)
         btn_about.pack(side=tk.LEFT, padx=(0, 8))
         self.buttons[2] = btn_about
+
+        self.btn_shuffle = tk.Label(
+            util_frame, text="",
+            font=(self.font_family, 10, "bold"),
+            bg="#C3A774", relief="raised", bd=3, padx=6, pady=2,
+        )
+        self.btn_shuffle.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_shuffle.bind("<Button-1>", lambda e: self._toggle_shuffle())
+        self._update_shuffle_button()
 
         # Spacer
         tk.Frame(util_frame, bg="#C3A774").pack(side=tk.LEFT, expand=True, fill="x")
@@ -1764,6 +1779,18 @@ class SidTkPlayer:
             self.audio_engine.volume = 0.0
             self.mute_btn.config(bg=C64_PALETTE["RED"], fg=C64_PALETTE["WHITE"])
 
+    def _toggle_shuffle(self):
+        """Attiva/disattiva lo shuffle per i prossimi caricamenti di playlist."""
+        self.shuffle = not self.shuffle
+        self._update_shuffle_button()
+
+    def _update_shuffle_button(self):
+        """Aggiorna testo e colore del bottone SHUF in base allo stato corrente."""
+        if self.shuffle:
+            self.btn_shuffle.config(text="SHUF: ON", fg=C64_PALETTE["LIGHT_GREEN"])
+        else:
+            self.btn_shuffle.config(text="SHUF: OFF", fg=C64_PALETTE["DARK_GREY"])
+
     # ------------------------------------------------------------------
     # Lettura metadata SID
     # ------------------------------------------------------------------
@@ -2028,7 +2055,8 @@ class SidTkPlayer:
             return False
 
         expanded = [os.path.expanduser(os.path.expandvars(line)) for line in lines]
-        random.shuffle(expanded)
+        if self.shuffle:
+            random.shuffle(expanded)
 
         self.tracks = []
         self.track_subsongs = {}

@@ -129,6 +129,9 @@ igdb_access_token =
 # Comando sidplayfp (deve essere nel PATH)
 sidplay_cmd = sidplayfp
 
+# Ordine casuale (true) o sequenziale (false) delle playlist
+shuffle = true
+
 [window]
 width = 640
 height = 580
@@ -210,6 +213,7 @@ Il pannello centrale, ispirato alla finestrella trasparente del Datasette, mostr
 | **LOAD** | Carica file SID o una playlist |
 | **OUT** | Seleziona il device di output audio |
 | **ABOUT** | Informazioni sull'applicazione |
+| **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo). Vale dal prossimo caricamento |
 | **VOL** | Slider volume (0–100%) |
 | **M** | Mute / unmute |
 
