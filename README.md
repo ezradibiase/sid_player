@@ -213,7 +213,7 @@ Il pannello centrale, ispirato alla finestrella trasparente del Datasette, mostr
 | **LOAD** | Carica file SID o una playlist |
 | **OUT** | Seleziona il device di output audio |
 | **ABOUT** | Informazioni sull'applicazione |
-| **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo). Vale dal prossimo caricamento |
+| **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo) |
 | **VOL** | Slider volume (0–100%) |
 | **M** | Mute / unmute |
 
