@@ -2469,7 +2469,7 @@ class SidTkPlayer:
         about_window = tk.Toplevel(self.master)
         about_window.title("About SIDPLAYER")
         about_window.configure(bg=C64_PALETTE["BLACK"])
-        about_window.geometry("460x580")
+        about_window.geometry("460x620")
         about_window.resizable(False, False)
 
         title_label = tk.Label(about_window, text="SIDPLAYER C64",
@@ -2505,19 +2505,26 @@ class SidTkPlayer:
                     log_message(f"Errore caricamento ritratto: {e}")
                 break
 
-        author_label = tk.Label(about_window, text="ezrad & IA  —  2026",
-                               font=(self.font_family, 11),
-                               fg=C64_PALETTE["WHITE"],
-                               bg=C64_PALETTE["BLACK"])
-        author_label.pack(pady=(6, 10))
+        # Crediti in stile demoscene, allineati a colonna (font monospace)
+        credits_label = tk.Label(about_window,
+                                text=("CODE ............ EZRAD & IA\n"
+                                      "MUSIC ........... HUBBARD, GALWAY, TEL,\n"
+                                      "                  DAGLISH & THE SID LEGENDS\n"
+                                      "SID CHIP ........ BOB YANNES, MOS 1982\n"
+                                      "SPECIAL THANKS .. HVSC CREW"),
+                                font=(self.font_family, 10),
+                                fg=C64_PALETTE["WHITE"],
+                                bg=C64_PALETTE["BLACK"],
+                                justify="left")
+        credits_label.pack(pady=(6, 10))
 
-        desc_label = tk.Label(about_window,
-                             text="C64 SID Music Player\nSTIL subsong titles · cover art · volume control",
-                             font=(self.font_family, 10),
-                             fg=C64_PALETTE["LIGHT_GREY"],
-                             bg=C64_PALETTE["BLACK"],
-                             wraplength=400, justify="center")
-        desc_label.pack(pady=(0, 10))
+        greetings_label = tk.Label(about_window,
+                                  text="GREETINGS TO ALL SID FANS WORLDWIDE",
+                                  font=(self.font_family, 10, "bold"),
+                                  fg=C64_PALETTE["LIGHT_GREEN"],
+                                  bg=C64_PALETTE["BLACK"],
+                                  wraplength=400, justify="center")
+        greetings_label.pack(pady=(0, 10))
 
         # Separatore
         tk.Frame(about_window, bg=C64_PALETTE["GREY"], height=1).pack(fill=tk.X, padx=40)
