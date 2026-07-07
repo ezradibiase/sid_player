@@ -43,7 +43,7 @@ exe = EXE(
 )
 import subprocess, os
 
-APP_VERSION = '6.1'
+APP_VERSION = '6.2'
 
 app = BUNDLE(
     exe,
