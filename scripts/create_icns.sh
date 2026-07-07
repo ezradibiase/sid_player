@@ -1,15 +1,18 @@
 #!/bin/bash
 # Script per convertire PNG in ICNS per macOS
 
-INPUT_PNG="commodore.png"
-OUTPUT_ICNS="commodore.icns"
-ICONSET_DIR="commodore.iconset"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ASSETS_DIR="$SCRIPT_DIR/../assets"
+
+INPUT_PNG="$ASSETS_DIR/commodore.png"
+OUTPUT_ICNS="$ASSETS_DIR/commodore.icns"
+ICONSET_DIR="$ASSETS_DIR/commodore.iconset"
 
 if [ ! -f "$INPUT_PNG" ]; then
     echo "Errore: $INPUT_PNG non trovato!"
     echo ""
     echo "Crea prima l'immagine PNG con:"
-    echo "  python3 create_commodore_icon.py"
+    echo "  python3 scripts/create_commodore_icon.py"
     echo ""
     echo "Oppure fornisci un'immagine PNG 512x512 del logo Commodore"
     exit 1

@@ -63,8 +63,8 @@ Clicca **LOAD**, scegli un file `.sid` (o una playlist), premi **PLAY**. Fine.
 > testato in profondità. Segnala problemi su [GitHub Issues](https://github.com/ezradibiase/sid_player/issues).
 
 Su **Windows**: scarica sidplayfp da [SourceForge](https://sourceforge.net/projects/sidplay-residfp/),
-poi doppio clic su `start_sidplayer.bat`. Su **macOS** puoi anche rendere eseguibile
-`start_sidplayer.command` e aprirlo dal Finder.
+poi doppio clic su `launchers/start_sidplayer.bat`. Su **macOS** puoi anche rendere
+eseguibile `launchers/start_sidplayer.command` e aprirlo dal Finder.
 
 Il font [C64 Pro Mono](https://github.com/mborgbrant/c64-pro-mono) è opzionale ma
 consigliato: senza, viene usato Courier come fallback.
