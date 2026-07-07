@@ -1636,14 +1636,16 @@ class SidTkPlayer:
         # Carica automaticamente la playlist se esiste
         self.load_playlist_file()
 
-        if self.total_tracks == 0:
-            self.label_title.config(text="LOAD & PLAY", fg=C64_PALETTE["LIGHT_GREEN"])
-            self.label_stil.config(text="")
-            self.label_author.config(text="Click LOAD to select SID files")
-
-        # banner rimosso: la finestrella parte vuota
+        self._show_boot_screen()
 
         self.update_status()
+
+        # Porta la finestra in primo piano all'avvio (poi permette ad altre
+        # finestre di tornare sopra, senza restare "always on top")
+        self.master.lift()
+        self.master.attributes("-topmost", True)
+        self.master.after_idle(self.master.attributes, "-topmost", False)
+        self.master.focus_force()
 
     # ------------------------------------------------------------------
     # PIL button helpers (Datasette style)
@@ -1734,22 +1736,28 @@ class SidTkPlayer:
 
         return ImageTk.PhotoImage(img)
 
-    def _show_banner_on_startup(self):
-        """Mostra sidplayer_banner.png nella finestrella solo all'avvio."""
-        banner_candidates = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "sidplayer_banner.png"),
-            os.path.expanduser("~/Library/Application Support/SIDPlayer/sidplayer_banner.png"),
-        ]
-        for path in banner_candidates:
-            if os.path.exists(path):
-                try:
-                    img = Image.open(path).convert("RGB")
-                    img.thumbnail((180, 180), Image.Resampling.LANCZOS)
-                    self._startup_banner = ImageTk.PhotoImage(img)
-                    self.image_label.config(image=self._startup_banner)
-                except Exception:
-                    pass
-                return
+    def _show_boot_screen(self):
+        """Easter egg: schermata di boot in stile C64 BASIC, mostrata solo all'avvio."""
+        green = C64_PALETTE["LIGHT_GREEN"]
+        self.label_title.config(text="**** COMMODORE 64 BASIC V2 ****", fg=green)
+        self.label_stil.config(text="64K RAM SYSTEM  38911 BASIC BYTES FREE", fg=green)
+        self.label_author.config(text='LOAD "SIDPLAYER",8,1', fg=green)
+        self.label_released.config(text="READY.", fg=green)
+        self.master.after(2500, self._hide_boot_screen)
+
+    def _hide_boot_screen(self):
+        """Passa dalla schermata di boot allo stato idle, se la riproduzione non è già iniziata."""
+        if self.playing:
+            return
+        self.label_stil.config(text="", fg=C64_PALETTE["CYAN"])
+        self.label_released.config(text="", fg=C64_PALETTE["GREY"])
+        if self.total_tracks == 0:
+            self.label_title.config(text="LOAD & PLAY", fg=C64_PALETTE["LIGHT_GREEN"])
+            self.label_author.config(text="Click LOAD to select SID files", fg=C64_PALETTE["CYAN"])
+        else:
+            self.label_title.config(text="PLAYLIST LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
+            self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY",
+                                      fg=C64_PALETTE["CYAN"])
 
     # ------------------------------------------------------------------
     # Play/Pause toggle
