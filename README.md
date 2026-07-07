@@ -8,6 +8,8 @@ Player di file **SID** (Commodore 64) con interfaccia grafica ispirata al Commod
 
 > ⚠️ **Nota**: SIDPlayer è **testato e supportato pienamente su macOS**. Il supporto per Linux e Windows è in **beta** — il codice ha fallback per quelle piattaforme, ma non è mai stato testato in profondità. Segnala problemi su [GitHub Issues](https://github.com/ezradibiase/sid_player/issues).
 
+![Interfaccia SIDPlayer](docs/interfaccia.webp)
+
 ---
 
 ## Caratteristiche
