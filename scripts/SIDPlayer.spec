@@ -7,6 +7,7 @@ a = Analysis(
     datas=[
         ('../stil_reader.py', '.'),
         ('../nowplaying_mac.py', '.'),
+        ('../gb64_reader.py', '.'),
         ('../ezrad_portrait.png', '.'),
     ],
     hiddenimports=['sounddevice', 'numpy'],
