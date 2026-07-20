@@ -168,6 +168,7 @@ class Config:
             'playlist_file': 'playlist.txt',
             'stil_path': '~/Music/C64Music/STIL.txt',  # Percorso opzionale per STIL.txt
             'hvsc_root': '',  # Root locale della collezione HVSC, per playlist con path HVSC-relativi
+            'gb64_boxart_path': '',  # Cartella locale box art di una collezione GB64 (opzionale)
         },
         'api': {
             'rawg_api_key': '',
@@ -263,6 +264,13 @@ class Config:
         return os.path.expanduser(os.path.expandvars(path))
 
     @property
+    def gb64_boxart_path(self):
+        path = self.get('paths', 'gb64_boxart_path')
+        if not path:
+            return None
+        return os.path.expanduser(os.path.expandvars(path))
+
+    @property
     def rawg_api_key(self):
         return self.get('api', 'rawg_api_key')
 
@@ -309,6 +317,20 @@ class Config:
 # ---------------------------------------------------------------------------
 # Utility condivisa: varianti del nome per la ricerca immagini
 # ---------------------------------------------------------------------------
+
+# Punteggiatura preservata nei nomi file oltre ad alfanumerici/spazio/trattini:
+# distingue titoli che altrimenti collasserebbero sullo stesso nome dopo la
+# sanitizzazione (es. "IK+" vs "IK", "Ghosts 'n Goblins"), causando cache
+# condivisa fra giochi diversi. Nessuno di questi è invalido come nome file
+# su macOS/Linux/Windows.
+_SAFE_FILENAME_EXTRA_CHARS = (' ', '-', '_', '+', '!', '&', "'")
+
+
+def _sanitize_filename(name):
+    """Rimuove solo i caratteri non validi per un nome file, preservando la
+    punteggiatura che distingue titoli diversi tra loro."""
+    return "".join(c for c in name if c.isalnum() or c in _SAFE_FILENAME_EXTRA_CHARS).strip()
+
 
 def _generate_name_variants(clean_name):
     """
@@ -363,22 +385,12 @@ def _generate_name_variants(clean_name):
         if shorter not in variants:
             variants.append(shorter)
 
-    # Solo la prima parola (ultimo tentativo) — escludi parole troppo generiche
-    # che troverebbero qualsiasi gioco e non il titolo corretto.
-    _GENERIC_FIRST_WORDS = {
-        'game', 'the', 'a', 'an',
-        'super', 'mega', 'ultra', 'hyper', 'turbo', 'pro', 'max',
-        'great', 'big', 'new', 'old', 'real', 'true', 'top',
-        'action', 'arcade', 'classic', 'original', 'special', 'deluxe',
-        'power', 'force', 'master', 'world', 'global', 'epic',
-        'space', 'star', 'sky', 'dark', 'light', 'fire', 'ice',
-        'fast', 'speed', 'hard', 'soft', 'mini', 'micro', 'maxi',
-    }
-    if (len(words) > 1
-            and len(words[0]) > 3
-            and words[0].lower() not in _GENERIC_FIRST_WORDS
-            and words[0] not in variants):
-        variants.append(words[0])
+    # NB: niente fallback "solo la prima parola". Una singola parola generica
+    # ("Test", "Ghouls", "MicroProse"...) tende a matchare esattamente un
+    # gioco completamente diverso invece del titolo cercato — non esiste una
+    # lista di parole "sicure" abbastanza completa da evitarlo in generale.
+    # I titoli SID che sono già una sola parola (es. "Trap") restano intatti:
+    # sono la prima variante provata, non passano da questo fallback.
 
     return variants
 
@@ -399,8 +411,15 @@ def _title_match_score(result_title, query):
     """
     import re
 
-    r = result_title.lower().strip()
-    q = query.lower().strip()
+    # Rimuove apostrofi (dritti e curvi) prima di ogni confronto: la stessa
+    # stringa può comparire come "Ghouls 'n Ghosts" su un database e
+    # "Ghouls 'n' Ghosts" sull'header SID — senza normalizzare, il match
+    # esatto/quasi-esatto fallisce e si scivola verso varianti più rischiose.
+    def _strip_apostrophes(s):
+        return re.sub(r"[''`]", '', s)
+
+    r = _strip_apostrophes(result_title.lower().strip())
+    q = _strip_apostrophes(query.lower().strip())
     if not q:
         return 0
 
@@ -428,34 +447,38 @@ def _title_match_score(result_title, query):
     # Result inizia con tutte le parole della query
     if r_words[:len(q_words)] == q_words:
         extra = r_words[len(q_words):]
-        sequel_words = {'ii', 'iii', 'iv', 'v', 'vi', 'vii', '2', '3', '4', '5',
-                        'plus', 'deluxe', 'special', 'edition', 'reloaded', 'returns',
-                        'redux', 'remastered', 'remake'}
         if not extra:
             return 100
-        if all(w in sequel_words for w in extra):
-            return 30   # Saboteur II per query "Saboteur"
-        return 60       # Ha extra ma non sono sequel noti
+        # Qualunque parola extra alla fine (sequel noti come "II", simboli come
+        # "+", o markers mai visti prima) è trattata con la stessa cautela: non
+        # possiamo enumerare ogni possibile marker di sequel/versione esistente,
+        # quindi un default permissivo per gli "sconosciuti" è proprio ciò che
+        # causa falsi positivi (es. "International Karate +" per query
+        # "International Karate" — due giochi diversi, non un'edizione).
+        return 30   # "Saboteur II" o "International Karate +" per query più corta
 
     # Query inizia con tutte le parole del result (result è prefisso della query)
     if q_words[:len(r_words)] == r_words:
         return 75
 
-    # Tutte le parole della query presenti nel result, ma precedute da prefisso
-    # ("Super R-Type" per query "R-Type")
-    prefix_penalty = {'super', 'mega', 'ultra', 'hyper', 'turbo', 'pro', 'new',
-                      'original', 'advanced', 'arcade', 'the'}
+    # Tutte le parole della query presenti nel result, ma con parole extra sparse
+    # ("Super R-Type" o "Space Trap" per query "R-Type"/"Trap"): stessa logica,
+    # non fidarsi di più delle parole extra solo perché non le riconosciamo.
     q_set = set(q_words)
     r_set = set(r_words)
     if q_set.issubset(r_set):
-        extra_words = r_set - q_set
-        if any(w in prefix_penalty for w in extra_words):
-            return 20   # Super R-Type per query "R-Type"
-        return 50
+        return 20   # "Super R-Type" per "R-Type", "Space Trap" per "Trap"
 
-    # Match per sottostringa
-    if q in r:
-        return 35
+    # Match per sottostringa, ma solo a livello di parola intera — non un
+    # frammento dentro una parola composta ("test" non deve matchare dentro
+    # "super-test", che con split() resta un unico token per via del trattino)
+    if len(q_words) == 1:
+        if q_words[0] in r_words:
+            return 35
+    else:
+        n = len(q_words)
+        if any(r_words[i:i + n] == q_words for i in range(len(r_words) - n + 1)):
+            return 35
 
     return 5
 
@@ -602,7 +625,7 @@ class RAWGGameImages:
             debug_print(f"Nessuna immagine disponibile per {game['name']}")
             return None
 
-        safe_game_name = "".join(c for c in game['name'] if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_game_name = _sanitize_filename(game['name'])
         if not safe_game_name:
             if sid_filename:
                 safe_game_name = sid_filename.replace('.sid', '').replace('.SID', '')
@@ -816,8 +839,7 @@ class IGDBGameImages:
 
         debug_print(f"Trovata copertina C64 per: {game.get('name', 'N/A')}")
 
-        safe_game_name = "".join(c for c in game.get('name', game_name_clean)
-                                if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_game_name = _sanitize_filename(game.get('name', game_name_clean))
         output_filename = f"{safe_game_name}_COVER.jpg"
         output_path = self.images_dir / output_filename
 
@@ -1274,6 +1296,7 @@ class SidTkPlayer:
         self.images_dir = self.config.images_dir
         self.playlist_file = self.config.playlist_file
         self.hvsc_root = self.config.hvsc_root
+        self.gb64_boxart_path = self.config.gb64_boxart_path
         self.sidplay_cmd = self.config.sidplay_cmd
         self.shuffle = self.config.shuffle
         self.font_family = self.config.font_family
@@ -2141,21 +2164,50 @@ class SidTkPlayer:
     # Immagini
     # ------------------------------------------------------------------
 
+    _IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
+
+    def _find_image_in_dir(self, directory, variants, suffixes=('',)):
+        """Cerca un file immagine in una directory locale, provando ogni
+        combinazione di variante/suffisso/estensione — prima match esatto,
+        poi case-insensitive. Restituisce il path se trovato, altrimenti None."""
+        if not directory or not os.path.isdir(directory):
+            return None
+
+        for variant in variants:
+            for suffix in suffixes:
+                for ext in self._IMAGE_EXTENSIONS:
+                    path = os.path.join(directory, variant + suffix + ext)
+                    if os.path.exists(path):
+                        return path
+
+        try:
+            existing = os.listdir(directory)
+        except OSError:
+            return None
+        existing_lower = {f.lower(): f for f in existing}
+
+        for variant in variants:
+            for suffix in suffixes:
+                candidate_lower = (variant + suffix).lower()
+                for ext in self._IMAGE_EXTENSIONS:
+                    key = candidate_lower + ext
+                    if key in existing_lower:
+                        return os.path.join(directory, existing_lower[key])
+
+        return None
+
     def find_game_image(self, sid_path, sid_title):
         """
         Cerca un'immagine per il gioco con strategia a cascata:
-          1. Match esatto locale (tutte le varianti del nome)
-          2. Match case-insensitive locale
+          1. Match locale nella cache di immagini già scaricate (esatto poi case-insensitive)
+          2. Match locale nella collezione box art GB64, se configurata (stessa logica)
           3. API IGDB → RAWG (con varianti del nome)
         """
         file_name = os.path.basename(sid_path)
 
-        def make_safe(name):
-            return "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).strip()
-
-        safe_title = make_safe(sid_title)
+        safe_title = _sanitize_filename(sid_title)
         if not safe_title:
-            safe_title = make_safe(file_name.replace('.sid', '').replace('.SID', ''))
+            safe_title = _sanitize_filename(file_name.replace('.sid', '').replace('.SID', ''))
 
         if not os.path.exists(self.images_dir):
             os.makedirs(self.images_dir, exist_ok=True)
@@ -2165,39 +2217,26 @@ class SidTkPlayer:
         local_variants = []
         seen = set()
         for v in raw_variants:
-            sv = make_safe(v)
+            sv = _sanitize_filename(v)
             if sv and sv not in seen:
                 local_variants.append(sv)
                 seen.add(sv)
 
-        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp']
+        # 1. Cache locale delle immagini già scaricate in precedenza
+        path = self._find_image_in_dir(self.images_dir, local_variants, suffixes=('', '_COVER'))
+        if path:
+            debug_print(f"Immagine locale: {os.path.basename(path)}")
+            return path, "Local file"
 
-        # 1. Match esatto per ogni variante e suffisso (_COVER)
-        for variant in local_variants:
-            for suffix in ('', '_COVER'):
-                for ext in image_extensions:
-                    path = os.path.join(self.images_dir, variant + suffix + ext)
-                    if os.path.exists(path):
-                        debug_print(f"Immagine locale (esatto): {os.path.basename(path)}")
-                        return path, "Local file"
-
-        # 2. Match case-insensitive sui file esistenti nella directory
-        try:
-            existing = os.listdir(self.images_dir)
-        except OSError:
-            existing = []
-
-        existing_lower = {f.lower(): f for f in existing}
-
-        for variant in local_variants:
-            for suffix in ('', '_cover'):
-                candidate_lower = (variant + suffix).lower()
-                for ext in image_extensions:
-                    key = candidate_lower + ext
-                    if key in existing_lower:
-                        path = os.path.join(self.images_dir, existing_lower[key])
-                        debug_print(f"Immagine locale (case-insensitive): {existing_lower[key]}")
-                        return path, "Local file"
+        # 2. Collezione GB64 (box art), se configurata — nessuna chiamata di
+        # rete, e in genere più affidabile perché curata specificamente per C64.
+        # GB64 nomina i file "NomeGioco.jpg" (con "_1", "_2"... per copertine
+        # multiple), quindi riusiamo la stessa logica di match locale.
+        if self.gb64_boxart_path:
+            path = self._find_image_in_dir(self.gb64_boxart_path, local_variants, suffixes=('', '_1'))
+            if path:
+                debug_print(f"Immagine GB64: {os.path.basename(path)}")
+                return path, "GB64 collection"
 
         # 3. API: IGDB → RAWG (le classi gestiscono già le varianti internamente)
         if self.igdb_fetcher:
