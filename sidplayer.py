@@ -166,11 +166,12 @@ class Config:
     DEFAULTS = {
         'paths': {
             'images_dir': '~/Pictures/SIDPlayer',
-            'playlist_file': 'playlist.txt',
+            'playlist_file': '',  # Playlist caricata all'avvio (opzionale, vuota di default)
             'stil_path': '~/Music/C64Music/STIL.txt',  # Percorso opzionale per STIL.txt
             'hvsc_root': '',  # Root locale della collezione HVSC, per playlist con path HVSC-relativi
             'gb64_boxart_path': '',  # Cartella locale "Cover" di una collezione GB64 (opzionale)
             'gb64_mdb_path': '',  # Percorso al file GBC_vNN.mdb di GB64, per match preciso (richiede mdbtools)
+            'gb64_photos_path': '',  # Cartella locale foto musicisti GB64 (opzionale)
         },
         'api': {
             'rawg_api_key': '',
@@ -246,6 +247,8 @@ class Config:
     @property
     def playlist_file(self):
         path = self.get('paths', 'playlist_file')
+        if not path:
+            return None
         if not os.path.isabs(path):
             script_dir = os.path.dirname(os.path.abspath(__file__))
             path = os.path.join(script_dir, path)
@@ -275,6 +278,13 @@ class Config:
     @property
     def gb64_mdb_path(self):
         path = self.get('paths', 'gb64_mdb_path')
+        if not path:
+            return None
+        return os.path.expanduser(os.path.expandvars(path))
+
+    @property
+    def gb64_photos_path(self):
+        path = self.get('paths', 'gb64_photos_path')
         if not path:
             return None
         return os.path.expanduser(os.path.expandvars(path))
@@ -1306,6 +1316,7 @@ class SidTkPlayer:
         self.playlist_file = self.config.playlist_file
         self.hvsc_root = self.config.hvsc_root
         self.gb64_boxart_path = self.config.gb64_boxart_path
+        self.gb64_photos_path = self.config.gb64_photos_path
         self.sidplay_cmd = self.config.sidplay_cmd
         self.shuffle = self.config.shuffle
         self.font_family = self.config.font_family
@@ -1433,10 +1444,21 @@ class SidTkPlayer:
             bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
         self.label_stil.place(x=0, y=48, width=364)
 
-        self.label_author = tk.Label(info_frame, text="",
+        # Riga autore: nome + foto del musicista a destra (collezione GB64
+        # locale, opzionale). La foto è nascosta di default, mostrata solo
+        # se disponibile per l'autore corrente — sempre subito dopo il nome,
+        # qualunque sia la sua lunghezza (pack, non coordinate fisse).
+        self.author_row_frame = tk.Frame(info_frame, bg=DATASETTE["GLASS"])
+        self.author_row_frame.place(x=0, y=70, width=364)
+
+        self.label_author = tk.Label(self.author_row_frame, text="",
             font=(self.font_family, 10), fg=C64_PALETTE["CYAN"],
-            bg=DATASETTE["GLASS"], wraplength=360, justify="left", anchor="w")
-        self.label_author.place(x=0, y=70, width=364)
+            bg=DATASETTE["GLASS"], wraplength=336, justify="left", anchor="w")
+        self.label_author.pack(side=tk.LEFT)
+
+        self.author_photo_image = None
+        self.author_photo_label = tk.Label(self.author_row_frame, bg=DATASETTE["GLASS"])
+        # non impacchettata qui: pack()/pack_forget() gestiti in _update_author_photo
 
         self.label_released = tk.Label(info_frame, text="",
             font=(self.font_family, 9), fg=C64_PALETTE["GREY"],
@@ -2115,7 +2137,7 @@ class SidTkPlayer:
         log_message(f"Cerco playlist: {playlist_path}")
         debug_print(f"📋 Cerco playlist: {playlist_path}")
 
-        if not os.path.exists(playlist_path):
+        if not playlist_path or not os.path.exists(playlist_path):
             log_message("Playlist non trovata")
             debug_print("  ⚠ Playlist non trovata")
             return False
@@ -2305,6 +2327,45 @@ class SidTkPlayer:
                                     bg=DATASETTE["GLASS"])
             self.image_source_label.config(text="")
 
+    _AUTHOR_PHOTO_SIZE = 22
+
+    def _find_author_photo(self, author):
+        """Cerca la foto del musicista nella collezione GB64 locale
+        (opzionale). Se l'header elenca più autori ("Rob Hubbard & Jason
+        Page"), prova anche solo il primo nome."""
+        if not self.gb64_photos_path or not author:
+            return None
+
+        variants = [author]
+        first_author = re.split(r'\s*[&,/]\s*', author)[0].strip()
+        if first_author and first_author != author:
+            variants.append(first_author)
+
+        variants = [_sanitize_filename(v).replace(' ', '_') for v in variants]
+        return self._find_image_in_dir(self.gb64_photos_path, variants)
+
+    def _update_author_photo(self, author):
+        """Mostra la foto del musicista subito a destra del nome se
+        disponibile, altrimenti nasconde lo spazio (nessun placeholder: è
+        un dettaglio secondario, non l'elemento visivo principale della
+        finestrella)."""
+        path = self._find_author_photo(author)
+
+        if not path:
+            self.author_photo_label.pack_forget()
+            return
+
+        try:
+            img = Image.open(path).convert("RGB")
+            size = self._AUTHOR_PHOTO_SIZE
+            img = img.resize((size, size), Image.Resampling.LANCZOS)
+            self.author_photo_image = ImageTk.PhotoImage(img)
+            self.author_photo_label.config(image=self.author_photo_image)
+            self.author_photo_label.pack(side=tk.LEFT, padx=(6, 0))
+        except Exception as e:
+            debug_print(f"Errore caricamento foto musicista: {e}")
+            self.author_photo_label.pack_forget()
+
     # ------------------------------------------------------------------
     # Controllo playlist
     # ------------------------------------------------------------------
@@ -2416,6 +2477,7 @@ class SidTkPlayer:
 
         author_text = f"by {author}" if author else ""
         self.label_author.config(text=author_text, fg=C64_PALETTE["CYAN"])
+        self._update_author_photo(author)
 
         self.label_released.config(text=released if released else "", fg=C64_PALETTE["GREY"])
 

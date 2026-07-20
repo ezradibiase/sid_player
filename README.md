@@ -135,8 +135,8 @@ Struttura di `sidplayer.cfg`:
 # Directory dove salvare le copertine scaricate
 images_dir = ~/Pictures/SIDPlayer
 
-# File playlist caricato automaticamente all'avvio
-playlist_file = playlist.txt
+# File playlist caricato automaticamente all'avvio (opzionale, vuoto di default)
+playlist_file =
 
 # Root locale della collezione HVSC, necessaria solo per playlist con
 # path HVSC-relativi (vedi sezione Playlist)
