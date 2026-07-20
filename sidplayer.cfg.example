@@ -15,10 +15,18 @@ playlist_file = playlist.txt
 # invece di path assoluti sul filesystem
 hvsc_root =
 
-# Cartella locale box art di una collezione GB64 (opzionale)
-# Se impostata, viene controllata prima delle API online: nessuna chiamata
-# di rete, e copertine più affidabili perché curate specificamente per C64
+# Collezione GB64 locale (opzionale), stesso approccio usato da DeepSID:
+# match preciso tramite il database invece di indovinare dal nome file.
+# Serve mdbtools installato (mdb-export nel PATH) per leggere il database.
+#
+# gb64_boxart_path: cartella "Cover" estratta dal pacchetto GB64 Extras
+# gb64_mdb_path: percorso al file GBC_vNN.mdb (database GameBase64)
+#
+# Se impostati entrambi, vengono controllati prima delle API online:
+# nessuna chiamata di rete, e la cover è quella ufficiale del gioco (non
+# uno screenshot generico o quella di un gioco diverso con nome simile).
 gb64_boxart_path =
+gb64_mdb_path =
 
 [api]
 # API Key per RAWG.io (opzionale)
