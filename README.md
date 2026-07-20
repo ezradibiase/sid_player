@@ -142,6 +142,13 @@ playlist_file = playlist.txt
 # path HVSC-relativi (vedi sezione Playlist)
 hvsc_root =
 
+# Cartella locale box art di una collezione GB64 (opzionale). Se impostata,
+# viene controllata prima delle API online: nessuna chiamata di rete, copertine
+# più affidabili perché curate specificamente per C64. GB64 nomina i file
+# "NomeGioco.jpg" (con "_1", "_2"... per copertine multiple) — stesso schema
+# usato per la cache locale in images_dir.
+gb64_boxart_path =
+
 # Percorso STIL.txt (lascia vuoto per ricerca automatica)
 stil_path =
 
