@@ -34,6 +34,7 @@ HAS_PROCESS_PAUSE = hasattr(signal, 'SIGSTOP')     # False su Windows
 
 # Import STIL Reader
 from stil_reader import STILReader
+from gb64_reader import GB64Database
 
 # Integrazione macOS Now Playing (Control Center, Touch Bar, tasti media)
 try:
@@ -168,7 +169,8 @@ class Config:
             'playlist_file': 'playlist.txt',
             'stil_path': '~/Music/C64Music/STIL.txt',  # Percorso opzionale per STIL.txt
             'hvsc_root': '',  # Root locale della collezione HVSC, per playlist con path HVSC-relativi
-            'gb64_boxart_path': '',  # Cartella locale box art di una collezione GB64 (opzionale)
+            'gb64_boxart_path': '',  # Cartella locale "Cover" di una collezione GB64 (opzionale)
+            'gb64_mdb_path': '',  # Percorso al file GBC_vNN.mdb di GB64, per match preciso (richiede mdbtools)
         },
         'api': {
             'rawg_api_key': '',
@@ -266,6 +268,13 @@ class Config:
     @property
     def gb64_boxart_path(self):
         path = self.get('paths', 'gb64_boxart_path')
+        if not path:
+            return None
+        return os.path.expanduser(os.path.expandvars(path))
+
+    @property
+    def gb64_mdb_path(self):
+        path = self.get('paths', 'gb64_mdb_path')
         if not path:
             return None
         return os.path.expanduser(os.path.expandvars(path))
@@ -1330,6 +1339,13 @@ class SidTkPlayer:
         else:
             debug_print("ℹ STIL non disponibile (i titoli SID usano header o nome file)")
 
+        # === GB64 Database (cover art precisa, stile DeepSID) ===
+        self.gb64_db = GB64Database(self.config.gb64_mdb_path)
+        if self.gb64_db.loaded:
+            debug_print("✓ Database GB64 caricato")
+        else:
+            debug_print("ℹ Database GB64 non disponibile (cover cercate solo online)")
+
         if not self.rawg_fetcher and not self.igdb_fetcher:
             debug_print("ℹ Nessun servizio API attivato. Solo immagini locali.")
 
@@ -2200,7 +2216,8 @@ class SidTkPlayer:
         """
         Cerca un'immagine per il gioco con strategia a cascata:
           1. Match locale nella cache di immagini già scaricate (esatto poi case-insensitive)
-          2. Match locale nella collezione box art GB64, se configurata (stessa logica)
+          2. Database GB64 (mdb), se configurato — match preciso per GA_Id
+             invece che euristico per nome file (stesso approccio di DeepSID)
           3. API IGDB → RAWG (con varianti del nome)
         """
         file_name = os.path.basename(sid_path)
@@ -2228,15 +2245,14 @@ class SidTkPlayer:
             debug_print(f"Immagine locale: {os.path.basename(path)}")
             return path, "Local file"
 
-        # 2. Collezione GB64 (box art), se configurata — nessuna chiamata di
-        # rete, e in genere più affidabile perché curata specificamente per C64.
-        # GB64 nomina i file "NomeGioco.jpg" (con "_1", "_2"... per copertine
-        # multiple), quindi riusiamo la stessa logica di match locale.
-        if self.gb64_boxart_path:
-            path = self._find_image_in_dir(self.gb64_boxart_path, local_variants, suffixes=('', '_1'))
-            if path:
-                debug_print(f"Immagine GB64: {os.path.basename(path)}")
-                return path, "GB64 collection"
+        # 2. Database GB64: match preciso per GA_Id (nessuna chiamata di rete)
+        if self.gb64_db.loaded and self.gb64_boxart_path:
+            rel_path = self.gb64_db.find_cover_relpath(sid_title, _title_match_score, _SCORE_MIN_C64)
+            if rel_path:
+                path = os.path.join(self.gb64_boxart_path, rel_path)
+                if os.path.exists(path):
+                    debug_print(f"Immagine GB64 (db): {os.path.basename(path)}")
+                    return path, "GB64 (DeepSID-style)"
 
         # 3. API: IGDB → RAWG (le classi gestiscono già le varianti internamente)
         if self.igdb_fetcher:

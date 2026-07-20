@@ -142,12 +142,11 @@ playlist_file = playlist.txt
 # path HVSC-relativi (vedi sezione Playlist)
 hvsc_root =
 
-# Cartella locale box art di una collezione GB64 (opzionale). Se impostata,
-# viene controllata prima delle API online: nessuna chiamata di rete, copertine
-# più affidabili perché curate specificamente per C64. GB64 nomina i file
-# "NomeGioco.jpg" (con "_1", "_2"... per copertine multiple) — stesso schema
-# usato per la cache locale in images_dir.
+# Collezione GB64 locale (opzionale), stesso approccio usato da DeepSID:
+# match preciso tramite il database invece di indovinare dal nome file
+# (vedi sezione "Copertine da GB64" più sotto).
 gb64_boxart_path =
+gb64_mdb_path =
 
 # Percorso STIL.txt (lascia vuoto per ricerca automatica)
 stil_path =
@@ -185,6 +184,56 @@ Senza API key il player funziona normalmente, ma non scarica le copertine dei gi
 **RAWG.io** (alternativa):
 1. Vai su https://rawg.io/apidocs e richiedi una API key gratuita
 2. Inseriscila in `sidplayer.cfg`
+
+### Copertine da GB64 (opzionale, consigliato)
+
+Oltre a IGDB/RAWG, SIDPlayer può usare una collezione [GB64](https://gb64.com) locale per le
+copertine, con lo stesso approccio di [DeepSID](https://deepsid.chordian.net/): match preciso
+tramite il database del gioco, invece di indovinare dal nome file. Nessuna chiamata di rete
+quando la copertina è disponibile in locale, e niente più copertine sbagliate per giochi con
+nomi simili.
+
+**Cosa serve, in breve:**
+
+| Cosa | Per cosa serve | Dove trovarlo |
+|---|---|---|
+| `mdbtools` installato (comando `mdb-export` nel PATH) | Leggere il database Access di GB64 | `port`/`brew`/`apt install mdbtools` |
+| `innoextract` (solo per estrarre il database, poi non serve più) | Il database si scarica come installer `.exe` Windows | `port`/`brew install innoextract` |
+| File `GBC_v19.mdb` | Il database GB64 vero e proprio | [gb64.com/downloads.php](https://gb64.com/downloads.php), sezione "GB64 v19 Database" |
+| Cartella con le immagini `Cover` | Le copertine effettive | [archive.org/details/gb64v19](https://archive.org/details/gb64v19), file `Extras/Cover.zip` (~2 GB) |
+
+Senza uno di questi (o se `mdbtools` non è installato), SIDPlayer salta semplicemente questo
+passaggio e cerca online come prima — nessun errore, solo meno copertine trovate in locale.
+
+**1. Installa mdbtools e innoextract:**
+```bash
+# macOS (MacPorts)
+sudo port install mdbtools innoextract
+# Homebrew
+brew install mdbtools innoextract
+# Linux (Debian/Ubuntu)
+sudo apt install mdbtools innoextract
+```
+
+**2. Scarica ed estrai il database** da [gb64.com/downloads.php](https://gb64.com/downloads.php)
+("GB64 v19 Database", ~7 MB) — è un installer Inno Setup per Windows, ma su macOS/Linux si estrae
+senza eseguirlo:
+```bash
+innoextract gb64v19.exe
+# il file che serve è dentro app/GBC_v19.mdb
+```
+
+**3. Scarica le immagini**: il pacchetto **Cover** (box art pulita, senza screenshot mischiati)
+si trova nella collezione completa su [Internet Archive](https://archive.org/details/gb64v19),
+dentro `Extras/Cover.zip` (~2 GB) — non nel download rapido di gb64.com, che offre solo un
+pacchetto "Screenshots" misto.
+
+**4. Configura in `sidplayer.cfg`** (consigliato tenere entrambi nella stessa cartella):
+```ini
+[paths]
+gb64_boxart_path = ~/Pictures/SIDPlayer/Cover
+gb64_mdb_path = ~/Pictures/SIDPlayer/GBC_v19.mdb
+```
 
 ---
 
