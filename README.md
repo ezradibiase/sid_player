@@ -193,33 +193,47 @@ tramite il database del gioco, invece di indovinare dal nome file. Nessuna chiam
 quando la copertina è disponibile in locale, e niente più copertine sbagliate per giochi con
 nomi simili.
 
-**1. Installa mdbtools** (legge il database Access di GB64):
+**Cosa serve, in breve:**
+
+| Cosa | Per cosa serve | Dove trovarlo |
+|---|---|---|
+| `mdbtools` installato (comando `mdb-export` nel PATH) | Leggere il database Access di GB64 | `port`/`brew`/`apt install mdbtools` |
+| `innoextract` (solo per estrarre il database, poi non serve più) | Il database si scarica come installer `.exe` Windows | `port`/`brew install innoextract` |
+| File `GBC_v19.mdb` | Il database GB64 vero e proprio | [gb64.com/downloads.php](https://gb64.com/downloads.php), sezione "GB64 v19 Database" |
+| Cartella con le immagini `Cover` | Le copertine effettive | [archive.org/details/gb64v19](https://archive.org/details/gb64v19), file `Extras/Cover.zip` (~2 GB) |
+
+Senza uno di questi (o se `mdbtools` non è installato), SIDPlayer salta semplicemente questo
+passaggio e cerca online come prima — nessun errore, solo meno copertine trovate in locale.
+
+**1. Installa mdbtools e innoextract:**
 ```bash
 # macOS (MacPorts)
-sudo port install mdbtools
+sudo port install mdbtools innoextract
 # Homebrew
-brew install mdbtools
+brew install mdbtools innoextract
 # Linux (Debian/Ubuntu)
-sudo apt install mdbtools
+sudo apt install mdbtools innoextract
 ```
 
-**2. Scarica da [gb64.com/downloads.php](https://gb64.com/downloads.php)**:
-- **GB64 v19 Database** (~7 MB) — è un installer Inno Setup per Windows; su macOS/Linux estrailo
-  senza eseguirlo con [innoextract](https://constexpr.org/innoextract/) (`innoextract gb64v19.exe`,
-  il file che serve è `app/GBC_v19.mdb`)
-- Per le immagini vere e proprie, serve il pacchetto **Cover** (box art pulita, senza screenshot
-  mischiati) dalla collezione completa su [Internet Archive](https://archive.org/details/gb64v19)
-  (`Extras/Cover.zip`, ~2 GB)
+**2. Scarica ed estrai il database** da [gb64.com/downloads.php](https://gb64.com/downloads.php)
+("GB64 v19 Database", ~7 MB) — è un installer Inno Setup per Windows, ma su macOS/Linux si estrae
+senza eseguirlo:
+```bash
+innoextract gb64v19.exe
+# il file che serve è dentro app/GBC_v19.mdb
+```
 
-**3. Configura in `sidplayer.cfg`**:
+**3. Scarica le immagini**: il pacchetto **Cover** (box art pulita, senza screenshot mischiati)
+si trova nella collezione completa su [Internet Archive](https://archive.org/details/gb64v19),
+dentro `Extras/Cover.zip` (~2 GB) — non nel download rapido di gb64.com, che offre solo un
+pacchetto "Screenshots" misto.
+
+**4. Configura in `sidplayer.cfg`** (consigliato tenere entrambi nella stessa cartella):
 ```ini
 [paths]
-gb64_boxart_path = /percorso/alla/cartella/Cover
-gb64_mdb_path = /percorso/a/GBC_v19.mdb
+gb64_boxart_path = ~/Pictures/SIDPlayer/Cover
+gb64_mdb_path = ~/Pictures/SIDPlayer/GBC_v19.mdb
 ```
-
-Se uno dei due manca (o mdbtools non è installato), SIDPlayer salta semplicemente questo passaggio
-e cerca online come prima — nessun errore, solo meno copertine trovate in locale.
 
 ---
 
