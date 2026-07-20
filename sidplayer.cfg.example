@@ -7,8 +7,10 @@
 # Default: ~/Pictures/SIDPlayer
 images_dir = ~/Pictures/SIDPlayer
 
-# File della playlist (percorso assoluto o relativo)
-playlist_file = playlist.txt
+# File della playlist caricato automaticamente all'avvio (opzionale, percorso
+# assoluto o relativo alla cartella dello script). Vuoto di default: senza
+# playlist configurata l'app parte semplicemente senza tracce caricate.
+playlist_file =
 
 # Root locale della collezione HVSC (opzionale)
 # Necessario solo se la playlist usa path HVSC-relativi (es. /Autore/Titolo.sid)
