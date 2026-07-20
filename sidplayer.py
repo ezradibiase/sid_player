@@ -1694,10 +1694,17 @@ class SidTkPlayer:
         self.buttons[5].config(state=tk.DISABLED)
         self.buttons[6].config(state=tk.DISABLED)
 
-        # Carica automaticamente la playlist se esiste
-        self.load_playlist_file()
-
+        # Boot screen: e' la prima cosa mostrata, e resta finche' non
+        # succede qualcosa (playlist da cfg, LOAD manuale, o avvio riproduzione)
         self._show_boot_screen()
+
+        # Carica automaticamente la playlist se esiste. Il caricamento è
+        # istantaneo, ma un piccolo ritardo prima di mostrare la conferma fa
+        # sì che il boot screen resti visibile un momento invece di sparire
+        # in una frazione di secondo impercettibile.
+        self.load_playlist_file()
+        if self.total_tracks > 0:
+            self.master.after(1500, self._confirm_playlist_autoloaded)
 
         self.update_status()
 
@@ -1797,28 +1804,80 @@ class SidTkPlayer:
 
         return ImageTk.PhotoImage(img)
 
-    def _show_boot_screen(self):
-        """Easter egg: schermata di boot in stile C64 BASIC, mostrata solo all'avvio."""
-        green = C64_PALETTE["LIGHT_GREEN"]
-        self.label_title.config(text="**** COMMODORE 64 BASIC V2 ****", fg=green)
-        self.label_stil.config(text="64K RAM SYSTEM  38911 BASIC BYTES FREE", fg=green)
-        self.label_author.config(text='LOAD "SIDPLAYER",8,1', fg=green)
-        self.label_released.config(text="READY.", fg=green)
-        self.master.after(2500, self._hide_boot_screen)
+    def _restore_normal_fonts(self):
+        """Ripristina font/geometria/allineamento normali delle label
+        eventualmente modificate dalla schermata di boot."""
+        self.label_title.place_forget()
+        self.label_title.config(font=(self.font_family, 16, "bold"),
+                                 anchor="w", justify="left")
+        self.label_title.place(x=0, y=0, width=364)
+        self.label_stil.place_forget()
+        self.label_stil.place(x=0, y=48, width=364)
+        self.label_released.place_forget()
+        self.label_released.config(font=(self.font_family, 9))
+        self.label_released.place(x=0, y=96, width=364)
 
-    def _hide_boot_screen(self):
-        """Passa dalla schermata di boot allo stato idle, se la riproduzione non è già iniziata."""
+    def _show_boot_screen(self):
+        """Easter egg: schermata di boot in stile C64 BASIC. È il primo stato
+        mostrato all'avvio e resta finché non succede qualcosa — nessun
+        timer, non e' una schermata "a tempo": la porta d'ingresso dell'app
+        finché non viene caricato un SID/playlist o non parte la riproduzione.
+
+        Titolo e riga RAM sono centrati (blocco unico su label_title, con le
+        righe vuote nei punti giusti, come il vero messaggio ROM del C64).
+        READY. e l'hint sotto sono invece allineati a sinistra — Tkinter non
+        permette allineamenti diversi dentro la stessa label, quindi vivono
+        su label separate (label_stil per READY., label_released per
+        l'hint). Le posizioni si incatenano usando l'altezza *reale* di ogni
+        label (winfo_reqheight, dopo update_idletasks) invece di un calcolo
+        a mano sull'interlinea del font, che ignorerebbe il padding interno
+        che Tkinter aggiunge di suo — altrimenti le righe si sovrappongono.
+        """
+        green = C64_PALETTE["LIGHT_GREEN"]
+        boot_font = (self.font_family, 9)
+
+        # Blocco centrato: titolo, riga vuota, RAM
+        centered_text = (
+            "**** COMMODORE 64 BASIC V2 ****\n"
+            "\n"
+            "64K RAM SYSTEM  38911 BASIC BYTES FREE\n"
+            "\n"
+        )
+        self.label_title.place_forget()
+        self.label_title.config(text=centered_text, fg=green, font=boot_font,
+                                 anchor="n", justify="center")
+        self.label_title.place(x=0, y=0, width=364)
+        self.label_title.update_idletasks()
+        y = self.label_title.winfo_reqheight()
+
+        # READY., allineato a sinistra, subito sotto il blocco centrato
+        self.label_stil.place_forget()
+        self.label_stil.config(text="READY.", fg=green)
+        self.label_stil.place(x=0, y=y, width=364)
+        self.label_stil.update_idletasks()
+        y += self.label_stil.winfo_reqheight()
+
+        self.author_photo_label.pack_forget()
+        self.label_author.config(text="")
+
+        # Hint, allineato a sinistra, subito sotto READY. (nessuno spazio)
+        self.label_released.place_forget()
+        self.label_released.config(text="Click LOAD to select SID files or playlist", fg=green,
+                                    font=(self.font_family, 8))
+        self.label_released.place(x=0, y=y, width=364)
+
+    def _confirm_playlist_autoloaded(self):
+        """Sostituisce la schermata di boot con la conferma di caricamento,
+        quando la playlist configurata in sidplayer.cfg viene caricata
+        automaticamente all'avvio (chiamata solo se total_tracks > 0)."""
         if self.playing:
-            return
+            return  # l'utente ha già premuto PLAY nel frattempo
+        self._restore_normal_fonts()
+        self.label_title.config(text="PLAYLIST LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
         self.label_stil.config(text="", fg=C64_PALETTE["CYAN"])
+        self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY",
+                                  fg=C64_PALETTE["CYAN"])
         self.label_released.config(text="", fg=C64_PALETTE["GREY"])
-        if self.total_tracks == 0:
-            self.label_title.config(text="LOAD & PLAY", fg=C64_PALETTE["LIGHT_GREEN"])
-            self.label_author.config(text="Click LOAD to select SID files", fg=C64_PALETTE["CYAN"])
-        else:
-            self.label_title.config(text="PLAYLIST LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
-            self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY",
-                                      fg=C64_PALETTE["CYAN"])
 
     # ------------------------------------------------------------------
     # Play/Pause toggle
@@ -2099,9 +2158,11 @@ class SidTkPlayer:
             for i in range(len(files)):
                 self.track_subsongs[i] = 1
             self.total_tracks = len(self.tracks)
+            self._restore_normal_fonts()
             self.label_title.config(text="FILES LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
             self.label_stil.config(text="")
             self.label_author.config(text=f"{self.total_tracks} files - Click PLAY")
+            self.label_released.config(text="", fg=C64_PALETTE["GREY"])
             self.blink_title()
             self.update_status()
             log_message(f"Caricati {self.total_tracks} file SID manualmente")
@@ -2120,9 +2181,11 @@ class SidTkPlayer:
             self.playlist_file = file_path
 
             if self.load_playlist_file():
+                self._restore_normal_fonts()
                 self.label_title.config(text="PLAYLIST LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
                 self.label_stil.config(text="")
                 self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY")
+                self.label_released.config(text="", fg=C64_PALETTE["GREY"])
                 self.blink_title()
                 self.update_status()
                 log_message(f"Playlist caricata da: {file_path}")
@@ -2423,6 +2486,8 @@ class SidTkPlayer:
     def play_next_track(self):
         # Ferma la traccia corrente (imposta stop_event → il callback non si attiva)
         self.audio_engine.stop()
+        # Nel caso si stia ancora vedendo il boot screen (font ridotti)
+        self._restore_normal_fonts()
 
         self.current_index += 1
         if self.current_index >= len(self.tracks):
