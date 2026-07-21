@@ -8,7 +8,7 @@ Un player desktop per i brani `.sid` del Commodore 64, con l'interfaccia ispirat
 al Datasette VC-1530: cover dei giochi, playlist HVSC, contatore a nastro
 e integrazione con Touch Bar e Control Center su macOS.
 
-![Version](https://img.shields.io/badge/version-v6.2-blue)
+![Version](https://img.shields.io/badge/version-v6.3-blue)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)

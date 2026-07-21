@@ -4,6 +4,44 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.3] — 2026-07-21
+
+### Aggiunto
+- **Copertine precise via database GB64** (`GBC_vNN.mdb`, stile [DeepSID](https://deepsid.chordian.net/)):
+  match esatto titolo SID → gioco invece di indovinare dal nome file, zero chiamate di
+  rete se configurato. Nuovo modulo `gb64_reader.py`, nuova config `gb64_mdb_path`.
+- **Foto del musicista** accanto al nome autore (collezione GB64 locale, opzionale,
+  config `gb64_photos_path`); nessun placeholder se manca, lo spazio resta nascosto.
+- **Boot screen persistente** in stile C64 BASIC: è la prima schermata mostrata e resta
+  finché non si carica un SID/playlist o parte la riproduzione, con layout fedele al
+  vero schermo di boot (titolo e RAM centrati, READY. e hint allineati a sinistra).
+- **Crediti in stile demoscene** nella schermata ABOUT (compositori SID storici, chip SID,
+  HVSC Crew).
+- Screenshot dell'interfaccia nel README.
+- **PLAY disabilitato** finché non è caricato almeno un SID o una playlist (stesso
+  meccanismo già usato per PREV/NEXT/STOP).
+
+### Modifiche
+- **Matching copertine IGDB/RAWG più prudente in generale** (non per singolo gioco):
+  fix falsi positivi come "International Karate" → "IK+", "Trap" → "Space Trap",
+  "Test" dentro "Super-Test"; normalizzazione apostrofi; rimosso il fallback rischioso
+  "sola prima parola".
+- `playlist_file` ora vuoto/opt-in di default (era `"playlist.txt"`), coerente con
+  `hvsc_root`/`gb64_*` — chi clona il repo parte senza playlist auto-caricata.
+- Messaggio dopo STOP semplificato: resta solo "STOPPED" (rimosso "Ready to load new
+  files", fuorviante dato che le tracce restano caricate e si può già premere PLAY).
+- Riorganizzazione file nella root del repo in `assets/`/`launchers/`; restyle del README.
+
+### Fix
+- Foto autore e tape counter non restano più "appesi" quando la playlist finisce o si
+  preme STOP.
+- Risolta sovrapposizione tra il messaggio di stato (es. avviso "No files found") e
+  l'hint della boot screen.
+- Il messaggio di conferma caricamento file/playlist non resta più rosso se in
+  precedenza era stato mostrato un avviso di errore sulla stessa label.
+
+---
+
 ## [v6.2] — 2026-07-07
 
 ### Aggiunto
