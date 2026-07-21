@@ -2172,7 +2172,7 @@ class SidTkPlayer:
             self._restore_normal_fonts()
             self.label_title.config(text="FILES LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
             self.label_stil.config(text="")
-            self.label_author.config(text=f"{self.total_tracks} files - Click PLAY")
+            self.label_author.config(text=f"{self.total_tracks} files - Click PLAY", fg=C64_PALETTE["CYAN"])
             self.label_released.config(text="", fg=C64_PALETTE["GREY"])
             self.blink_title()
             self.update_status()
@@ -2195,7 +2195,8 @@ class SidTkPlayer:
                 self._restore_normal_fonts()
                 self.label_title.config(text="PLAYLIST LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
                 self.label_stil.config(text="")
-                self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY")
+                self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY",
+                                          fg=C64_PALETTE["CYAN"])
                 self.label_released.config(text="", fg=C64_PALETTE["GREY"])
                 self.blink_title()
                 self.update_status()
