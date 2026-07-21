@@ -1688,11 +1688,12 @@ class SidTkPlayer:
             debug_print(f"AVVISO: Directory immagini non trovata: {self.images_dir}")
             os.makedirs(self.images_dir, exist_ok=True)
 
-        # Stato iniziale bottoni transport: disabilitati
+        # Stato iniziale bottoni transport: disabilitati (PLAY incluso,
+        # finché non viene caricato almeno un SID o una playlist)
         self.buttons[3].config(state=tk.DISABLED)
-        self.buttons[4].config(state=tk.NORMAL)
         self.buttons[5].config(state=tk.DISABLED)
         self.buttons[6].config(state=tk.DISABLED)
+        self._update_play_pause_button()
 
         # Boot screen: e' la prima cosa mostrata, e resta finche' non
         # succede qualcosa (playlist da cfg, LOAD manuale, o avvio riproduzione)
@@ -1900,7 +1901,8 @@ class SidTkPlayer:
         if btn is None:
             return
         if not self.playing:
-            btn.config(text="▶\nPLAY",   state=tk.NORMAL)
+            btn.config(text="▶\nPLAY",
+                       state=tk.NORMAL if self.tracks else tk.DISABLED)
         elif self.paused:
             btn.config(text="▶\nRESUME", state=tk.NORMAL)
         else:
@@ -2176,6 +2178,7 @@ class SidTkPlayer:
             self.label_released.config(text="", fg=C64_PALETTE["GREY"])
             self.blink_title()
             self.update_status()
+            self._update_play_pause_button()
             log_message(f"Caricati {self.total_tracks} file SID manualmente")
 
     def _load_playlist_dialog(self):
@@ -2271,6 +2274,7 @@ class SidTkPlayer:
 
         log_message(f"Caricate {self.total_tracks} tracce dalla playlist")
         debug_print(f"  ✓ Caricate {self.total_tracks} tracce dalla playlist (randomizzate)")
+        self._update_play_pause_button()
         return bool(self.tracks)
 
     # ------------------------------------------------------------------
@@ -2483,7 +2487,7 @@ class SidTkPlayer:
         self.subsong_frame.place_forget()
         self.label_title.config(text="STOPPED", fg=C64_PALETTE["RED"])
         self.label_stil.config(text="")
-        self.label_author.config(text="Ready to load new files")
+        self.label_author.config(text="")
         self.label_released.config(text="")
         self.label_track.config(text="")
         self.image_label.config(image=self.cover_placeholder, text="")
