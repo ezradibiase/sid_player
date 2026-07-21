@@ -13,9 +13,9 @@ e integrazione con Touch Bar e Control Center su macOS.
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-<img src="docs/interfaccia.webp" alt="SIDPlayer in riproduzione: Rambo First Blood Part II di Martin Galway, con cover art, subsong selector e contatore a nastro" width="640">
+<img src="docs/athena.webp" alt="SIDPlayer in riproduzione: Athena di Martin Galway, con cover art, foto dell'autore, subsong selector e contatore a nastro" width="640">
 
-*In riproduzione: Martin Galway, "Rambo: First Blood Part II" (1985 Ocean) — subsong 1 di 23.*
+*In riproduzione: Martin Galway, "Athena" (1987 Imagine) — subsong 1 di 9, con cover art e foto dell'autore.*
 
 </div>
 
@@ -300,6 +300,14 @@ Il pannello centrale, ispirato alla finestrella trasparente del Datasette, mostr
 - Il badge Commodore nella barra di trasporto include un contatore a 3 cifre animato
   con etichetta **COUNTER**
 
+All'avvio, prima di caricare qualsiasi cosa, la finestrella mostra una schermata di
+boot in stile C64 BASIC — resta visibile finché non si carica un SID/playlist o parte
+la riproduzione:
+
+<img src="docs/boot.webp" alt="Schermata di boot in stile C64 BASIC V2, con READY. e l'invito a caricare file SID o una playlist" width="500">
+
+*La schermata di boot, prima cosa mostrata all'avvio: persiste finché non si carica un SID o una playlist.*
+
 ### Bottoni utility
 
 | Pulsante | Funzione |
@@ -310,6 +318,10 @@ Il pannello centrale, ispirato alla finestrella trasparente del Datasette, mostr
 | **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo) |
 | **VOL** | Slider volume (0–100%) |
 | **M** | Mute / unmute |
+
+<img src="docs/about.webp" alt="Schermata ABOUT con crediti in stile demoscene: code, music, SID chip, special thanks" width="420">
+
+*La schermata ABOUT, con crediti in stile demoscene anni '80.*
 
 ### Bottoni trasporto (stile Datasette)
 
