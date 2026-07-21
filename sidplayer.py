@@ -1816,6 +1816,8 @@ class SidTkPlayer:
         self.label_released.place_forget()
         self.label_released.config(font=(self.font_family, 9))
         self.label_released.place(x=0, y=96, width=364)
+        self.author_row_frame.place_forget()
+        self.author_row_frame.place(x=0, y=70, width=364)
 
     def _show_boot_screen(self):
         """Easter egg: schermata di boot in stile C64 BASIC. È il primo stato
@@ -1865,6 +1867,15 @@ class SidTkPlayer:
         self.label_released.config(text="Click LOAD to select SID files or playlist", fg=green,
                                     font=(self.font_family, 8))
         self.label_released.place(x=0, y=y, width=364)
+        self.label_released.update_idletasks()
+        y += self.label_released.winfo_reqheight()
+
+        # Riga autore (usata anche per eventuali avvisi, es. "No files
+        # found" se si preme PLAY senza aver caricato nulla): spostata
+        # dinamicamente sotto l'hint, altrimenti resterebbe nella posizione
+        # fissa del layout normale (y=70) e ci si sovrapporrebbe sopra.
+        self.author_row_frame.place_forget()
+        self.author_row_frame.place(x=0, y=y, width=364)
 
     def _confirm_playlist_autoloaded(self):
         """Sostituisce la schermata di boot con la conferma di caricamento,
@@ -2476,6 +2487,7 @@ class SidTkPlayer:
         self.label_track.config(text="")
         self.image_label.config(image=self.cover_placeholder, text="")
         self.image_source_label.config(text="")
+        self._update_author_photo(None)
         self.buttons[0].config(state=tk.NORMAL)     # LOAD
         self.buttons[3].config(state=tk.DISABLED)   # PREV
         self.buttons[5].config(state=tk.DISABLED)   # NEXT
@@ -2498,6 +2510,8 @@ class SidTkPlayer:
             self.label_track.config(text="")
             self.image_label.config(image=self.cover_placeholder, text="")
             self.image_source_label.config(text="")
+            self._update_author_photo(None)
+            self.tape_counter.reset()
             self.playing = False
             self.paused = False
             self.buttons[0].config(state=tk.NORMAL)     # LOAD
