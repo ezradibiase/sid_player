@@ -105,6 +105,14 @@ except ImportError:
     HAS_REQUESTS = False
     log_message("ATTENZIONE: 'requests' non installato - supporto API disabilitato")
 
+# Prova a importare tkinterdnd2 per il drag & drop di file/cartelle
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    HAS_DND = True
+except ImportError:
+    HAS_DND = False
+    log_message("ATTENZIONE: 'tkinterdnd2' non installato - drag & drop disabilitato")
+
 # Prova a importare sounddevice per il controllo volume
 try:
     import sounddevice as sd
@@ -1376,6 +1384,12 @@ class SidTkPlayer:
                                 bg=DATASETTE["PLASTIC"], highlightthickness=0)
         self.canvas.pack()
 
+        # Drag & drop di file .sid o cartelle sulla finestra (opzionale,
+        # richiede tkinterdnd2 — se assente l'app funziona comunque via LOAD)
+        if HAS_DND:
+            self.canvas.drop_target_register(DND_FILES)
+            self.canvas.dnd_bind('<<Drop>>', self._on_drop_files)
+
         # ---------------------------------------------------------------
         # Now Playing (macOS Control Center / Touch Bar)
         # ---------------------------------------------------------------
@@ -1865,7 +1879,7 @@ class SidTkPlayer:
 
         # Hint, allineato a sinistra, subito sotto READY. (nessuno spazio)
         self.label_released.place_forget()
-        self.label_released.config(text="Click LOAD to select SID files or playlist", fg=green,
+        self.label_released.config(text="Click LOAD, or drag & drop SID files, folders or playlists", fg=green,
                                     font=(self.font_family, 8))
         self.label_released.place(x=0, y=y, width=364)
         self.label_released.update_idletasks()
@@ -2159,6 +2173,22 @@ class SidTkPlayer:
         y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (180 // 2)
         dialog.geometry(f"350x180+{x}+{y}")
 
+    def _load_track_list(self, files, via):
+        """Imposta la lista di tracce e aggiorna la UI di conseguenza.
+        Condiviso tra selezione manuale (dialog) e drag & drop."""
+        self.tracks = list(files)
+        self.track_subsongs = {i: 1 for i in range(len(self.tracks))}
+        self.total_tracks = len(self.tracks)
+        self._restore_normal_fonts()
+        self.label_title.config(text="FILES LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
+        self.label_stil.config(text="")
+        self.label_author.config(text=f"{self.total_tracks} files - Click PLAY", fg=C64_PALETTE["CYAN"])
+        self.label_released.config(text="", fg=C64_PALETTE["GREY"])
+        self.blink_title()
+        self.update_status()
+        self._update_play_pause_button()
+        log_message(f"Caricati {self.total_tracks} file SID {via}")
+
     def _load_sid_files(self):
         """Carica file SID selezionati dall'utente"""
         files = filedialog.askopenfilenames(
@@ -2166,20 +2196,65 @@ class SidTkPlayer:
             filetypes=[("SID files", "*.sid"), ("All files", "*.*")]
         )
         if files:
-            self.tracks = list(files)
-            self.track_subsongs = {}
-            for i in range(len(files)):
-                self.track_subsongs[i] = 1
-            self.total_tracks = len(self.tracks)
+            self._load_track_list(files, "manualmente")
+
+    def _collect_sid_files(self, paths):
+        """Da una lista di path (file e/o cartelle, es. da drag & drop)
+        raccoglie tutti i file .sid, esplorando le cartelle ricorsivamente."""
+        sid_files = []
+        for p in paths:
+            if os.path.isdir(p):
+                for dirpath, _, filenames in sorted(os.walk(p)):
+                    for name in sorted(filenames):
+                        if name.lower().endswith('.sid'):
+                            sid_files.append(os.path.join(dirpath, name))
+            elif p.lower().endswith('.sid') and os.path.isfile(p):
+                sid_files.append(p)
+        return sid_files
+
+    _PLAYLIST_EXTENSIONS = ('.txt', '.cfg', '.lst', '.m3u', '.pls')
+
+    def _load_playlist_from_path(self, file_path):
+        """Carica una playlist da un path esplicito e aggiorna la UI di
+        conseguenza. Condiviso tra dialog manuale e drag & drop.
+        Restituisce True se il caricamento è riuscito."""
+        original_playlist = self.playlist_file
+        self.playlist_file = file_path
+
+        ok = self.load_playlist_file()
+        if ok:
             self._restore_normal_fonts()
-            self.label_title.config(text="FILES LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
+            self.label_title.config(text="PLAYLIST LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
             self.label_stil.config(text="")
-            self.label_author.config(text=f"{self.total_tracks} files - Click PLAY", fg=C64_PALETTE["CYAN"])
+            self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY",
+                                      fg=C64_PALETTE["CYAN"])
             self.label_released.config(text="", fg=C64_PALETTE["GREY"])
             self.blink_title()
             self.update_status()
-            self._update_play_pause_button()
-            log_message(f"Caricati {self.total_tracks} file SID manualmente")
+            log_message(f"Playlist caricata da: {file_path}")
+
+        self.playlist_file = original_playlist
+        return ok
+
+    def _on_drop_files(self, event):
+        """Gestisce il drop di file/cartelle sulla finestra (tkinterdnd2):
+        carica le tracce (SID, cartelle, o una playlist) e avvia subito la
+        riproduzione."""
+        paths = self.master.tk.splitlist(event.data)
+
+        playlist_path = next(
+            (p for p in paths
+             if os.path.isfile(p) and p.lower().endswith(self._PLAYLIST_EXTENSIONS)),
+            None)
+        if playlist_path:
+            if self._load_playlist_from_path(playlist_path):
+                self.play_pause_toggle()
+            return
+
+        sid_files = self._collect_sid_files(paths)
+        if sid_files:
+            self._load_track_list(sid_files, "via drag & drop")
+            self.play_pause_toggle()
 
     def _load_playlist_dialog(self):
         """Carica un file playlist selezionato dall'utente"""
@@ -2190,24 +2265,8 @@ class SidTkPlayer:
                 ("All files", "*.*")
             ]
         )
-        if file_path:
-            original_playlist = self.playlist_file
-            self.playlist_file = file_path
-
-            if self.load_playlist_file():
-                self._restore_normal_fonts()
-                self.label_title.config(text="PLAYLIST LOADED", fg=C64_PALETTE["LIGHT_GREEN"])
-                self.label_stil.config(text="")
-                self.label_author.config(text=f"{self.total_tracks} files from playlist - Click PLAY",
-                                          fg=C64_PALETTE["CYAN"])
-                self.label_released.config(text="", fg=C64_PALETTE["GREY"])
-                self.blink_title()
-                self.update_status()
-                log_message(f"Playlist caricata da: {file_path}")
-            else:
-                messagebox.showerror("Error", "Failed to load playlist")
-
-            self.playlist_file = original_playlist
+        if file_path and not self._load_playlist_from_path(file_path):
+            messagebox.showerror("Error", "Failed to load playlist")
 
     def load_playlist_file(self):
         """Carica il file playlist se esiste."""
@@ -2942,7 +3001,7 @@ def main():
     log_message(f"Config: {config.config_file}")
     config.ensure_directories()
 
-    root = tk.Tk()
+    root = TkinterDnD.Tk() if HAS_DND else tk.Tk()
     app = SidTkPlayer(root, config=config)
     root.mainloop()
 
