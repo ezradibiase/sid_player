@@ -58,6 +58,9 @@ python3 sidplayer.py
 
 Clicca **LOAD**, scegli un file `.sid` (o una playlist), premi **PLAY**. Fine.
 
+In alternativa, trascina uno o più file `.sid` (o un'intera cartella) direttamente
+sulla finestra: la riproduzione parte da sola.
+
 > ⚠️ SIDPlayer è **testato e supportato pienamente su macOS**. Il supporto per Linux e
 > Windows è in **beta** — il codice ha fallback per quelle piattaforme, ma non è mai stato
 > testato in profondità. Segnala problemi su [GitHub Issues](https://github.com/ezradibiase/sid_player/issues).
@@ -92,6 +95,7 @@ sono affezionato e volevo un player che gli somigliasse.
 - File `.sid` (PSID/RSID) via `sidplayfp`, con durate dal database HVSC Songlengths
 - Navigazione **subsong** (◄ / ►) con lettura del default song dall'header SID
 - Playlist personalizzate e in **formato standard HVSC** (anche liste "ranked" come le Top100)
+- **Drag & drop**: trascina file `.sid` o intere cartelle sulla finestra per caricarli e avviare subito la riproduzione
 - **Shuffle** attivabile/disattivabile a runtime (bottone SHUF)
 - Controllo volume in tempo reale, mute, pausa/ripresa
 - Selezione del device di output audio, incluse casse Bluetooth
