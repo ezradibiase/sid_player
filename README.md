@@ -331,10 +331,10 @@ la riproduzione:
 
 | Pulsante | Funzione |
 |----------|----------|
-| **◄◄ PREV** | Torna al brano precedente (risuona il primo se già al primo) |
-| **▶ PLAY / ⏸ PAUSE** | Avvia la riproduzione; durante il play alterna pausa e ripresa |
-| **▶▶ NEXT** | Passa alla traccia successiva |
-| **■ STOP** | Ferma la riproduzione |
+| **REWIND ◄◄** | Torna al brano precedente (risuona il primo se già al primo) |
+| **PLAY ▶ / PAUSE ⏸** | Avvia la riproduzione; durante il play alterna pausa e ripresa |
+| **FFWD ▶▶** | Passa alla traccia successiva |
+| **STOP ■** | Ferma la riproduzione |
 
 ### Navigazione subsong
 
