@@ -1333,7 +1333,7 @@ class TransportButton:
         # Altezza esplicita: senza, pack_propagate(False) blocca il frame
         # alla dimensione minima di default (quasi 0px) invece di adattarsi
         # al testo — l'etichetta risultava invisibile, non solo piccola.
-        label_holder = tk.Frame(legend_row, width=self._W, height=38,
+        label_holder = tk.Frame(legend_row, width=self._W, height=26,
                                 bg=TRANSPORT["LEGEND_BG"])
         label_holder.pack(side=tk.LEFT, padx=8, pady=(3, 2))
         label_holder.pack_propagate(False)
@@ -1701,44 +1701,65 @@ class SidTkPlayer:
         # Transport bar — badge Commodore in cima + tasti
         # ---------------------------------------------------------------
         transport_outer = tk.Frame(self.canvas,
-                                   bg=TRANSPORT["BG"],
+                                   bg=DATASETTE["PLASTIC"],
                                    relief="ridge", bd=4)
         transport_outer.place(x=20, y=426, width=600, height=150)
 
-        # Badge Commodore
+        # Riga superiore: la "targhetta" nero+grigio non copre tutta la
+        # larghezza come il resto (come nella foto del Datasette originale,
+        # dove la placca è incassata nella scocca beige, non a tutta banda) —
+        # inizia poco prima della "C=" e finisce poco prima del counter, che
+        # sta fuori, sulla plastica beige.
         _badge_col = "#b0afb4"
-        badge_frame = tk.Frame(transport_outer, height=34, bg=TRANSPORT["BG"])
+        top_row = tk.Frame(transport_outer, height=79, bg=DATASETTE["PLASTIC"])
+        top_row.pack(fill=tk.X, side=tk.TOP)
+        top_row.pack_propagate(False)
+
+        bar_plate = tk.Frame(top_row, width=380, height=79, bg=DATASETTE["PLASTIC"])
+        # place() invece di pack(): il counter, impacchettato a destra nella
+        # stessa riga, ridurrebbe la cavità disponibile e sposterebbe il
+        # centro del pack — place() si centra sulla larghezza intera di
+        # top_row, la stessa usata dal gruppo tasti sotto, restando allineati
+        bar_plate.place(relx=0.5, y=0, anchor="n")
+        bar_plate.pack_propagate(False)
+
+        # Badge Commodore (nero). Contenuto ancorato in basso (anchor="s"):
+        # l'altezza è più dell'ingombro naturale delle label, lo spazio in
+        # più recuperato dalla striscia etichette sotto va tenuto in alto,
+        # non distribuito attorno al contenuto.
+        badge_frame = tk.Frame(bar_plate, height=47, bg=TRANSPORT["BG"])
         badge_frame.pack(fill=tk.X, side=tk.TOP)
         badge_frame.pack_propagate(False)
 
         tk.Label(badge_frame, text="C= commodore",
                  fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=(self.font_family, 13, "bold")).pack(side=tk.LEFT, padx=(10, 0))
+                 font=(self.font_family, 13, "bold")).pack(side=tk.LEFT, padx=(12, 0), anchor="s")
 
-        # Barre decorative al centro (dove prima stava il counter)
         tk.Label(badge_frame, text="▉▊▋▌▍▎▏",
                  fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=("Courier", 16, "bold")).pack(side=tk.LEFT, expand=True)
+                 font=("Courier", 16, "bold")).pack(side=tk.LEFT, expand=True, anchor="s")
 
-        # Counter a destra (dove prima stavano le barre)
-        counter_frame = tk.Frame(badge_frame, bg=TRANSPORT["BG"])
-        counter_frame.pack(side=tk.RIGHT, padx=(0, 10))
+        # Striscia grigia con le etichette (parola+simbolo) — la targhetta
+        # RECORD/PLAY/REWIND/... stampata sulla scocca, separata dai tasti
+        # neri sotto: non deve avere lo sfondo beige della plastica.
+        legend_row = tk.Frame(bar_plate, height=32, bg=TRANSPORT["LEGEND_BG"])
+        legend_row.pack(fill=tk.X, side=tk.TOP)
+        legend_row.pack_propagate(False)
+        legend_group = tk.Frame(legend_row, bg=TRANSPORT["LEGEND_BG"])
+        legend_group.pack(expand=True)
+
+        # Counter, fuori dalla targhetta, sulla plastica beige a destra —
+        # stessa fascia verticale (ancorato in basso), colori scuri invece
+        # del grigio chiaro (pensato per contrasto su nero, non su beige)
+        counter_frame = tk.Frame(top_row, bg=DATASETTE["PLASTIC"])
+        counter_frame.pack(side=tk.RIGHT, padx=(0, 10), anchor="s")
 
         self.tape_counter = TapeCounter(counter_frame, self.master)
         self.tape_counter.canvas.pack(side=tk.TOP)
 
         tk.Label(counter_frame, text="COUNTER",
-                 fg=_badge_col, bg=TRANSPORT["BG"],
+                 fg=DATASETTE["TEXT"], bg=DATASETTE["PLASTIC"],
                  font=(self.font_family, 6, "bold")).pack(side=tk.TOP)
-
-        # Striscia grigia con le etichette (parola+simbolo) — la targhetta
-        # RECORD/PLAY/REWIND/... stampata sulla scocca, separata dai tasti
-        # neri sotto: non deve avere lo sfondo beige della plastica.
-        legend_row = tk.Frame(transport_outer, height=45, bg=TRANSPORT["LEGEND_BG"])
-        legend_row.pack(fill=tk.X, side=tk.TOP)
-        legend_row.pack_propagate(False)
-        legend_group = tk.Frame(legend_row, bg=TRANSPORT["LEGEND_BG"])
-        legend_group.pack(expand=True)
 
         # Riga tasti: rettangoli neri su sfondo plastica beige (i tasti neri
         # non avrebbero contrasto su sfondo nero come il badge sopra)
