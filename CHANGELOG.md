@@ -4,6 +4,21 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.4] — 2026-07-22
+
+### Aggiunto
+- **Drag & drop** (issue #3): trascina file `.sid`, intere cartelle (esplorate
+  ricorsivamente) o file playlist (`.txt`/`.cfg`/`.lst`/`.m3u`/`.pls`) direttamente sulla
+  finestra — vengono caricati e la riproduzione parte subito. Richiede `tkinterdnd2`
+  (opzionale: se assente, l'app funziona comunque via LOAD).
+
+### Modifiche
+- Screenshot del README aggiornati: immagine principale con Athena (Martin Galway),
+  aggiunte le schermate di boot e ABOUT nella sezione Interfaccia.
+- Hint nella boot screen aggiornato per menzionare anche il drag & drop.
+
+---
+
 ## [v6.3] — 2026-07-21
 
 ### Aggiunto
