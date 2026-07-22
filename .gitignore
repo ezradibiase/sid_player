@@ -4,9 +4,11 @@ sidplayer.cfg
 # Immagine autore (personale)
 ezrad_portrait.png
 playlist.txt
+*playlist*
 igdb_credentials.txt
 rawg_api_key.txt
 Top100_corrected.lst
+*.sid
 
 # Build
 archive/
