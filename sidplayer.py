@@ -151,11 +151,11 @@ DATASETTE = {
 }
 
 TRANSPORT = {
-    "BG":      "#000000",   # sfondo area trasporto
-    "BTN":     "#493e39",   # superficie tasto
-    "BTN_ACT": "#6b5a52",   # tasto premuto
-    "BTN_DIS": "#7a6a62",   # tasto disabilitato
-    "TEXT":    "#3a302d",   # testo/simbolo sul tasto
+    "BG":        "#000000",   # sfondo badge Commodore (logo + counter)
+    "BTN":       "#3a3229",   # tasto: rettangolo nero, senza testo dentro
+    "BTN_ACT":   "#4a4033",   # tasto premuto
+    "BTN_DIS":   "#2a2520",   # tasto disabilitato
+    "LEGEND_BG": "#BBBBBB",   # striscia grigia dietro etichette parola+simbolo
 }
 
 
@@ -1309,6 +1309,79 @@ class TapeCounter:
         self._render(0, 0, 1.0)
 
 
+class TransportButton:
+    """Tasto trasporto stile Datasette VC-1530: rettangolo nero verticale
+    senza testo dentro; l'etichetta (parola sopra, simbolo sotto) vive
+    invece su una striscia grigia separata sopra i tasti, come la targhetta
+    RECORD/PLAY/REWIND/... stampata sulla scocca del device originale.
+
+    tk.Button ignora bg/fg personalizzati su macOS (tema Aqua nativo), quindi
+    il "tasto" è un tk.Label con binding sul click — stesso workaround già
+    usato per SHUF e le frecce subsong. Espone .config(text=, state=) con la
+    stessa firma di tk.Button per restare compatibile con le chiamate
+    esistenti (self.buttons[N].config(...)) senza toccare il resto del codice.
+    """
+    _W, _H = 46, 62
+
+    def __init__(self, legend_row, button_row, text, command, font_family):
+        self.command = command  # None per i tasti decorativi (es. RECORD/EJECT)
+        self._state = tk.NORMAL
+
+        # Colonna etichetta, stessa larghezza/spaziatura della colonna tasto
+        # sotto — così le due righe restano allineate pur vivendo in due
+        # frame (e due sfondi) separati.
+        # Altezza esplicita: senza, pack_propagate(False) blocca il frame
+        # alla dimensione minima di default (quasi 0px) invece di adattarsi
+        # al testo — l'etichetta risultava invisibile, non solo piccola.
+        label_holder = tk.Frame(legend_row, width=self._W, height=38,
+                                bg=TRANSPORT["LEGEND_BG"])
+        label_holder.pack(side=tk.LEFT, padx=8, pady=(3, 2))
+        label_holder.pack_propagate(False)
+
+        self.label = tk.Label(label_holder, font=(font_family, 8, "bold"),
+                               justify="center", pady=0,
+                               fg=DATASETTE["TEXT"], bg=TRANSPORT["LEGEND_BG"])
+        self.label.pack(expand=True)
+        self._set_label_text(text)
+
+        holder = tk.Frame(button_row, width=self._W, height=self._H,
+                          bg=DATASETTE["PLASTIC"])
+        holder.pack(side=tk.LEFT, padx=8, pady=4)
+        holder.pack_propagate(False)
+
+        self.btn = tk.Label(holder, bg=TRANSPORT["BTN"], relief="raised", bd=2)
+        self.btn.pack(fill=tk.BOTH, expand=True)
+        self.btn.bind("<ButtonPress-1>", self._on_press)
+        self.btn.bind("<ButtonRelease-1>", self._on_release)
+
+    def _set_label_text(self, text):
+        # I chiamanti passano "simbolo\nparola" (stessa convenzione di prima,
+        # quando il testo stava dentro il tasto) — qui si inverte per
+        # mostrare la parola sopra e il simbolo sotto, come richiesto.
+        parts = text.split("\n", 1)
+        symbol, word = (parts[0], parts[1]) if len(parts) == 2 else ("", parts[0])
+        self.label.config(text=f"{word}\n{symbol}")
+
+    def _on_press(self, _event):
+        if self._state == tk.NORMAL:
+            self.btn.config(bg=TRANSPORT["BTN_ACT"], relief="sunken")
+
+    def _on_release(self, _event):
+        if self._state == tk.NORMAL:
+            self.btn.config(bg=TRANSPORT["BTN"], relief="raised")
+            if self.command:
+                self.command()
+
+    def config(self, text=None, state=None):
+        if text is not None:
+            self._set_label_text(text)
+        if state is not None:
+            self._state = state
+            enabled = state == tk.NORMAL
+            self.btn.config(bg=TRANSPORT["BTN"] if enabled else TRANSPORT["BTN_DIS"],
+                            cursor="hand2" if enabled else "arrow")
+
+
 # Player principale
 # ---------------------------------------------------------------------------
 
@@ -1553,7 +1626,7 @@ class SidTkPlayer:
         self._muted = False
         self._pre_mute_volume = 70
 
-        self.buttons = [None] * 7  # 7 slot totali
+        self.buttons = [None] * 9  # 7 funzionali + RECORD/EJECT (decorativi, slot 7/8)
 
         _btn_style = dict(
             font=(self.font_family, 10, "bold"),
@@ -1630,7 +1703,7 @@ class SidTkPlayer:
         transport_outer = tk.Frame(self.canvas,
                                    bg=TRANSPORT["BG"],
                                    relief="ridge", bd=4)
-        transport_outer.place(x=20, y=426, width=600, height=100)
+        transport_outer.place(x=20, y=426, width=600, height=150)
 
         # Badge Commodore
         _badge_col = "#b0afb4"
@@ -1642,8 +1715,14 @@ class SidTkPlayer:
                  fg=_badge_col, bg=TRANSPORT["BG"],
                  font=(self.font_family, 13, "bold")).pack(side=tk.LEFT, padx=(10, 0))
 
+        # Barre decorative al centro (dove prima stava il counter)
+        tk.Label(badge_frame, text="▉▊▋▌▍▎▏",
+                 fg=_badge_col, bg=TRANSPORT["BG"],
+                 font=("Courier", 16, "bold")).pack(side=tk.LEFT, expand=True)
+
+        # Counter a destra (dove prima stavano le barre)
         counter_frame = tk.Frame(badge_frame, bg=TRANSPORT["BG"])
-        counter_frame.pack(side=tk.LEFT, expand=True)
+        counter_frame.pack(side=tk.RIGHT, padx=(0, 10))
 
         self.tape_counter = TapeCounter(counter_frame, self.master)
         self.tape_counter.canvas.pack(side=tk.TOP)
@@ -1652,37 +1731,44 @@ class SidTkPlayer:
                  fg=_badge_col, bg=TRANSPORT["BG"],
                  font=(self.font_family, 6, "bold")).pack(side=tk.TOP)
 
-        tk.Label(badge_frame, text="▉▊▋▌▍▎▏",
-                 fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=("Courier", 16, "bold")).pack(side=tk.RIGHT, padx=(0, 10))
+        # Striscia grigia con le etichette (parola+simbolo) — la targhetta
+        # RECORD/PLAY/REWIND/... stampata sulla scocca, separata dai tasti
+        # neri sotto: non deve avere lo sfondo beige della plastica.
+        legend_row = tk.Frame(transport_outer, height=45, bg=TRANSPORT["LEGEND_BG"])
+        legend_row.pack(fill=tk.X, side=tk.TOP)
+        legend_row.pack_propagate(False)
+        legend_group = tk.Frame(legend_row, bg=TRANSPORT["LEGEND_BG"])
+        legend_group.pack(expand=True)
 
-        # Riga bottoni
-        btn_row = tk.Frame(transport_outer, bg=TRANSPORT["BG"])
+        # Riga tasti: rettangoli neri su sfondo plastica beige (i tasti neri
+        # non avrebbero contrasto su sfondo nero come il badge sopra)
+        btn_row = tk.Frame(transport_outer, bg=DATASETTE["PLASTIC"])
         btn_row.pack(fill=tk.X, side=tk.TOP, expand=True)
 
-        _btn_w, _btn_h = 120, 56
+        # Gruppo centrato (expand=True senza fill → si centra nello spazio
+        # residuo, sia in orizzontale che in verticale, invece di restare
+        # ancorato a sinistra). Stessa larghezza/spaziatura colonna della
+        # riga legenda sopra, per restare allineati.
+        btn_group = tk.Frame(btn_row, bg=DATASETTE["PLASTIC"])
+        btn_group.pack(expand=True)
 
+        # Ordine come sulla scocca originale: RECORD PLAY REWIND FFWD STOP EJECT.
+        # RECORD ed EJECT sono decorativi (nessun comando, sempre disabilitati):
+        # l'app non registra, e non c'è una cassetta da espellere.
         transport_specs = [
-            ("◄◄", "PREV",  self.prev_track),       # buttons[3]
-            ("▶",  "PLAY",  self.play_pause_toggle), # buttons[4]
-            ("▶▶", "NEXT",  self.skip_track),        # buttons[5]
-            ("■",  "STOP",  self.stop_playlist),     # buttons[6]
+            ("●",  "RECORD", None,                    7),
+            ("▶",  "PLAY",   self.play_pause_toggle,   4),
+            ("◄◄", "REWIND", self.prev_track,           3),
+            ("▶▶", "FFWD",   self.skip_track,           5),
+            ("■",  "STOP",   self.stop_playlist,        6),
+            ("▲",  "EJECT",  None,                     8),
         ]
 
-        for slot_idx, (symbol, label, cmd) in enumerate(transport_specs, start=3):
-            btn = self._create_transport_btn(btn_row, symbol, label, cmd, _btn_w, _btn_h)
-            btn.pack(side=tk.LEFT, padx=10, pady=4)
+        for symbol, label, cmd, slot_idx in transport_specs:
+            btn = TransportButton(legend_group, btn_group, f"{symbol}\n{label}", cmd, self.font_family)
             self.buttons[slot_idx] = btn
-
-        # ---------------------------------------------------------------
-        # Status bar (y=502, h=18)
-        # ---------------------------------------------------------------
-        self.status_frame = tk.Frame(self.canvas, bg=C64_PALETTE["EZ_DBLUE"], height=22)
-        self.status_frame.place(x=0, y=546, width=self.config.window_width)
-        self.status_label = tk.Label(self.status_frame, text="READY. - CLICK LOAD TO PLAY.",
-            font=(self.font_family, 9, "bold"),
-            fg=C64_PALETTE["EZ_LBLUE"], bg=C64_PALETTE["EZ_DBLUE"])
-        self.status_label.place(x=10, y=2)
+            if cmd is None:
+                btn.config(state=tk.DISABLED)
 
         # ---------------------------------------------------------------
         # Stato applicazione
@@ -1729,66 +1815,6 @@ class SidTkPlayer:
         self.master.attributes("-topmost", True)
         self.master.after_idle(self.master.attributes, "-topmost", False)
         self.master.focus_force()
-
-    # ------------------------------------------------------------------
-    # PIL button helpers (Datasette style)
-    # ------------------------------------------------------------------
-
-    def _hex_to_rgb(self, hex_color):
-        """Converte un colore hex '#RRGGBB' in tupla (R, G, B)."""
-        h = hex_color.lstrip('#')
-        return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
-
-    def _make_btn_bg(self, w, h, state='normal'):
-        """
-        Genera il background PIL RGBA per un transport button Datasette.
-        state: 'normal' | 'pressed' | 'disabled'
-        """
-        img = Image.new('RGBA', (w, h), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-
-        border_rgb = self._hex_to_rgb(DATASETTE["BORDER"])
-        if state == 'pressed':
-            body_rgb = self._hex_to_rgb(DATASETTE["PRESSED"])
-        elif state == 'disabled':
-            body_rgb = self._hex_to_rgb(DATASETTE["DIS"])
-        else:
-            body_rgb = self._hex_to_rgb(DATASETTE["BODY"])
-
-        hi_rgb  = self._hex_to_rgb(DATASETTE["HI"])
-        sh_rgb  = self._hex_to_rgb(DATASETTE["SH"])
-
-        # Bordo esterno (2px) con angoli arrotondati
-        draw.rounded_rectangle([0, 0, w-1, h-1], radius=6, fill=border_rgb)
-        # Body interno
-        draw.rounded_rectangle([2, 2, w-3, h-3], radius=5, fill=body_rgb)
-        # Highlight top/left
-        draw.line([(3, 2), (w-4, 2)], fill=hi_rgb, width=1)  # top
-        draw.line([(2, 3), (2, h-4)], fill=hi_rgb, width=1)  # left
-        # Shadow bottom/right
-        draw.line([(3, h-3), (w-4, h-3)], fill=sh_rgb, width=1)  # bottom
-        draw.line([(w-3, 3), (w-3, h-4)], fill=sh_rgb, width=1)  # right
-
-        return img
-
-    def _create_transport_btn(self, parent, symbol, label, cmd, w, h):
-        """Crea un tk.Button in stile Datasette scuro con simbolo e testo."""
-        btn = tk.Button(
-            parent,
-            text=f"{symbol}\n{label}",
-            font=(self.font_family, 12, "bold"),
-            fg=TRANSPORT["TEXT"],
-            bg=TRANSPORT["BTN"],
-            activebackground=TRANSPORT["BTN_ACT"],
-            activeforeground=TRANSPORT["TEXT"],
-            disabledforeground=TRANSPORT["BTN_DIS"],
-            relief="raised",
-            bd=3,
-            cursor="hand2",
-            width=7,
-            command=cmd,
-        )
-        return btn
 
     def _make_placeholder_image(self, w, h):
         """Crea un'immagine placeholder C64-style con PIL."""
@@ -2105,17 +2131,11 @@ class SidTkPlayer:
         self.master.after(200, lambda: self.label_title.config(fg=current_fg))
 
     def update_status(self):
+        """Aggiorna label_track nella finestrella (rimossa la status bar in
+        basso, ridondante con le informazioni già mostrate lì)."""
         if self.playing and self.total_tracks > 0:
-            vol_pct = self.volume_var.get()
             track_num = f"{self.current_index+1}/{self.total_tracks}"
-            state = "PAUSED" if self.paused else "PLAYING"
-            self.status_label.config(text=f"{state} {track_num}  VOL:{vol_pct}%")
-            # Aggiorna anche label_track nella finestrella
             self.label_track.config(text=f"Track {track_num}")
-        elif self.total_tracks > 0:
-            self.status_label.config(text=f"{self.total_tracks} files loaded - READY.")
-        else:
-            self.status_label.config(text="READY. - CLICK LOAD TO PLAY.")
 
     # ------------------------------------------------------------------
     # Caricamento file / playlist
@@ -2525,8 +2545,8 @@ class SidTkPlayer:
         self.playing = True
         self.paused = False
         self.buttons[0].config(state=tk.DISABLED)   # LOAD
-        self.buttons[3].config(state=tk.NORMAL)     # PREV
-        self.buttons[5].config(state=tk.NORMAL)     # NEXT
+        self.buttons[3].config(state=tk.NORMAL)     # REWIND
+        self.buttons[5].config(state=tk.NORMAL)     # FFWD
         self.buttons[6].config(state=tk.NORMAL)     # STOP
         self._update_play_pause_button()
         self.play_next_track()
@@ -2553,8 +2573,8 @@ class SidTkPlayer:
         self.image_source_label.config(text="")
         self._update_author_photo(None)
         self.buttons[0].config(state=tk.NORMAL)     # LOAD
-        self.buttons[3].config(state=tk.DISABLED)   # PREV
-        self.buttons[5].config(state=tk.DISABLED)   # NEXT
+        self.buttons[3].config(state=tk.DISABLED)   # REWIND
+        self.buttons[5].config(state=tk.DISABLED)   # FFWD
         self.buttons[6].config(state=tk.DISABLED)   # STOP
         self._update_play_pause_button()
         self.update_status()
@@ -2579,8 +2599,8 @@ class SidTkPlayer:
             self.playing = False
             self.paused = False
             self.buttons[0].config(state=tk.NORMAL)     # LOAD
-            self.buttons[3].config(state=tk.DISABLED)   # PREV
-            self.buttons[5].config(state=tk.DISABLED)   # NEXT
+            self.buttons[3].config(state=tk.DISABLED)   # REWIND
+            self.buttons[5].config(state=tk.DISABLED)   # FFWD
             self.buttons[6].config(state=tk.DISABLED)   # STOP
             self._update_play_pause_button()
             self.update_status()
