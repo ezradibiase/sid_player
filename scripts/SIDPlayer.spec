@@ -10,7 +10,7 @@ a = Analysis(
         ('../gb64_reader.py', '.'),
         ('../ezrad_portrait.png', '.'),
     ],
-    hiddenimports=['sounddevice', 'numpy'],
+    hiddenimports=['sounddevice', 'numpy', 'tkinterdnd2'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
