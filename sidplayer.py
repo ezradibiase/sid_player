@@ -1752,16 +1752,34 @@ class SidTkPlayer:
                  fg=_badge_col, bg=TRANSPORT["BG"],
                  font=(self.font_family, 13, "bold")).pack(side=tk.LEFT, padx=(12, 0), anchor="s")
 
-        tk.Label(badge_frame, text="▉▊▋▌▍▎▏",
-                 fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=("Courier", 16, "bold")).pack(side=tk.LEFT, expand=True, anchor="s")
+        # Pannellino grigio con le barre nere. fill=Y invece di anchor="s":
+        # il grigio riempie tutta l'altezza del badge, arrivando fino al
+        # bordo inferiore alla stessa quota della striscia etichette sotto,
+        # invece di essere solo alto quanto il testo.
+        # Bordo nero solo sul lato destro: tk.Frame non supporta uno spessore
+        # diverso per lato con highlightthickness (è uniforme sui 4 lati),
+        # quindi si usa una striscia da 2px al posto giusto invece che un
+        # bordo completo — niente bordo a sinistra/sopra/sotto, che
+        # toccherebbero rispettivamente il nero del badge e il pannello sotto.
+        bars_panel = tk.Frame(badge_frame, bg=TRANSPORT["LEGEND_BG"])
+        bars_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(50, 0))
+        tk.Frame(bars_panel, bg="#000000", width=2).pack(side=tk.RIGHT, fill=tk.Y)
+
+        tk.Label(bars_panel, text="▉▊▋▌▍▎▏",
+                 fg="#000000", bg=TRANSPORT["LEGEND_BG"],
+                 font=("Courier", 34, "bold")).pack(expand=True, padx=(4, 2))
 
         # Striscia grigia con le etichette (parola+simbolo) — la targhetta
         # RECORD/PLAY/REWIND/... stampata sulla scocca, separata dai tasti
         # neri sotto: non deve avere lo sfondo beige della plastica.
+        # Bordo nero su sinistra/destra/sotto, non sopra (tocca il pannello
+        # barre sopra — stesso motivo delle strisce manuali sopra).
         legend_row = tk.Frame(bar_plate, height=32, bg=TRANSPORT["LEGEND_BG"])
         legend_row.pack(fill=tk.X, side=tk.TOP)
         legend_row.pack_propagate(False)
+        tk.Frame(legend_row, bg="#000000", width=2).pack(side=tk.LEFT, fill=tk.Y)
+        tk.Frame(legend_row, bg="#000000", width=2).pack(side=tk.RIGHT, fill=tk.Y)
+        tk.Frame(legend_row, bg="#000000", height=2).pack(side=tk.BOTTOM, fill=tk.X)
         legend_group = tk.Frame(legend_row, bg=TRANSPORT["LEGEND_BG"])
         legend_group.pack(expand=True)
 
