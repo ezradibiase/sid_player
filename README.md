@@ -56,7 +56,7 @@ pip install -r requirements.txt
 python3 sidplayer.py
 ```
 
-Clicca **LOAD**, scegli un file `.sid` (o una playlist), premi **PLAY**. Fine.
+Clicca **EJECT**, scegli un file `.sid` (o una playlist), premi **PLAY**. Fine.
 
 In alternativa, trascina uno o più file `.sid` (o un'intera cartella) direttamente
 sulla finestra: la riproduzione parte da sola.
@@ -168,7 +168,7 @@ igdb_access_token =
 sidplay_cmd = sidplayfp
 
 # Ordine casuale (true) o sequenziale (false) delle playlist
-shuffle = true
+shuffle = false
 
 [window]
 width = 640
@@ -316,10 +316,10 @@ la riproduzione:
 
 | Pulsante | Funzione |
 |----------|----------|
-| **LOAD** | Carica file SID o una playlist |
 | **OUT** | Seleziona il device di output audio |
+| **HELP** | Spiega le funzioni di EJECT, PLAY e RECORD |
 | **ABOUT** | Informazioni sull'applicazione |
-| **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo) |
+| **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo, disattivato di default) |
 | **VOL** | Slider volume (0–100%) |
 | **M** | Mute / unmute |
 
@@ -331,10 +331,14 @@ la riproduzione:
 
 | Pulsante | Funzione |
 |----------|----------|
-| **REWIND ◄◄** | Torna al brano precedente (risuona il primo se già al primo) |
+| **RECORD ●** | Salva su disco l'elenco delle tracce caricate come nuova playlist (chiede sempre il nome del file); LED rosso acceso durante il salvataggio |
 | **PLAY ▶ / PAUSE ⏸** | Avvia la riproduzione; durante il play alterna pausa e ripresa |
+| **REWIND ◄◄** | Torna al brano precedente (risuona il primo se già al primo) |
 | **FFWD ▶▶** | Passa alla traccia successiva |
 | **STOP ■** | Ferma la riproduzione |
+| **EJECT ▲** | Carica file SID o una playlist (stessa scelta prima su LOAD) |
+
+Il pulsante **HELP** nella riga utility spiega RECORD/PLAY/EJECT direttamente nell'app.
 
 ### Navigazione subsong
 

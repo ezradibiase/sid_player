@@ -49,7 +49,7 @@ sidplay_cmd = sidplayfp
 
 # Riproduci la playlist in ordine casuale (true) o sequenziale (false)
 # Puoi cambiarlo anche a runtime col bottone SHUF nell'interfaccia
-shuffle = true
+shuffle = false
 
 # Nota: Il font "C64 Pro Mono" viene usato se installato nel sistema
 # Altrimenti viene usato un font di fallback (Courier)
