@@ -188,7 +188,7 @@ class Config:
         },
         'player': {
             'sidplay_cmd': 'sidplayfp',
-            'shuffle': 'true',
+            'shuffle': 'false',
         },
         'window': {
             'width': '640',
@@ -1626,31 +1626,48 @@ class SidTkPlayer:
         self._muted = False
         self._pre_mute_volume = 70
 
-        self.buttons = [None] * 9  # 7 funzionali + RECORD/EJECT (decorativi, slot 7/8)
+        self.buttons = [None] * 9  # 7 funzionali + RECORD/EJECT, slot 7/8
 
-        _btn_style = dict(
-            font=(self.font_family, 10, "bold"),
-            fg=C64_PALETTE["BLACK"],
-            bg="#b0afb4",
-            activebackground=C64_PALETTE["LIGHT_GREY"],
-            activeforeground=C64_PALETTE["BLACK"],
-            relief="raised", bd=3, padx=6, pady=2,
-        )
+        def _make_utility_btn(parent, text, command):
+            # tk.Button ignora bg/fg personalizzati su macOS (tema Aqua) —
+            # tk.Label con binding, stesso workaround di SHUF e dei tasti
+            # trasporto. Nessuno di questi tre va mai disabilitato, quindi
+            # non serve un .config(state=) come su TransportButton.
+            btn = tk.Label(parent, text=text,
+                          font=(self.font_family, 10, "bold"),
+                          fg=DATASETTE["TEXT"], bg=TRANSPORT["LEGEND_BG"],
+                          relief="raised", bd=3, padx=6, pady=2,
+                          cursor="hand2")
 
-        btn_load = tk.Button(util_frame, text="LOAD", command=self.load_files_dialog, **_btn_style)
-        btn_load.pack(side=tk.LEFT, padx=(0, 4))
-        self.buttons[0] = btn_load
+            def on_press(_e):
+                btn.config(relief="sunken")
 
-        btn_out = tk.Button(util_frame, text="OUT", command=self.show_audio_output_dialog, **_btn_style)
+            def on_release(_e):
+                btn.config(relief="raised")
+                command()
+
+            btn.bind("<ButtonPress-1>", on_press)
+            btn.bind("<ButtonRelease-1>", on_release)
+            return btn
+
+        # Riassegnazione a catena (issue #36): LOAD si carica ora sul tasto
+        # EJECT del trasporto (sempre fedele all'etichetta EJECT, cambia solo
+        # l'azione al click); questi due slot prendono il posto lasciato
+        # libero, uno ciascuno.
+        btn_out = _make_utility_btn(util_frame, "OUT", self.show_audio_output_dialog)
         btn_out.pack(side=tk.LEFT, padx=(0, 4))
-        self.buttons[1] = btn_out
+        self.buttons[0] = btn_out
 
-        btn_about = tk.Button(util_frame, text="ABOUT", command=self.show_about, **_btn_style)
+        btn_help = _make_utility_btn(util_frame, "HELP", self.show_help)
+        btn_help.pack(side=tk.LEFT, padx=(0, 4))
+        self.buttons[1] = btn_help
+
+        btn_about = _make_utility_btn(util_frame, "ABOUT", self.show_about)
         btn_about.pack(side=tk.LEFT, padx=(0, 8))
         self.buttons[2] = btn_about
 
         self.btn_shuffle = tk.Label(
-            util_frame, text="",
+            util_frame, text="", width=9, anchor="center",
             font=(self.font_family, 10, "bold"),
             bg=DATASETTE["PLASTIC"], relief="raised", bd=3, padx=6, pady=2,
         )
@@ -1757,9 +1774,23 @@ class SidTkPlayer:
         self.tape_counter = TapeCounter(counter_frame, self.master)
         self.tape_counter.canvas.pack(side=tk.TOP)
 
-        tk.Label(counter_frame, text="COUNTER",
+        # LED rosso accanto a "COUNTER": spento finché non si preme RECORD,
+        # poi resta acceso. Riga separata (LED + testo) invece del solo
+        # Label, così il gruppo si centra sotto la casella cifre come prima.
+        counter_label_row = tk.Frame(counter_frame, bg=DATASETTE["PLASTIC"])
+        counter_label_row.pack(side=tk.TOP)
+
+        self._record_led_off = "#5a1414"
+        self._record_led_on = "#ff2020"
+        self.record_led_canvas = tk.Canvas(counter_label_row, width=7, height=7,
+                                           bg=DATASETTE["PLASTIC"], highlightthickness=0)
+        self.record_led_canvas.pack(side=tk.LEFT, padx=(0, 3))
+        self.record_led = self.record_led_canvas.create_oval(
+            1, 1, 6, 6, fill=self._record_led_off, outline="")
+
+        tk.Label(counter_label_row, text="COUNTER",
                  fg=DATASETTE["TEXT"], bg=DATASETTE["PLASTIC"],
-                 font=(self.font_family, 6, "bold")).pack(side=tk.TOP)
+                 font=(self.font_family, 6, "bold")).pack(side=tk.LEFT)
 
         # Riga tasti: rettangoli neri su sfondo plastica beige (i tasti neri
         # non avrebbero contrasto su sfondo nero come il badge sopra)
@@ -1774,22 +1805,26 @@ class SidTkPlayer:
         btn_group.pack(expand=True)
 
         # Ordine come sulla scocca originale: RECORD PLAY REWIND FFWD STOP EJECT.
-        # RECORD ed EJECT sono decorativi (nessun comando, sempre disabilitati):
-        # l'app non registra, e non c'è una cassetta da espellere.
+        # RECORD salva su disco la playlist attualmente caricata (issue #36);
+        # EJECT apre la stessa scelta file/playlist di LOAD, che ora sta qui
+        # invece che nella riga utility — l'etichetta EJECT resta invariata,
+        # fedele alla scocca originale, cambia solo l'azione al click.
         transport_specs = [
-            ("●",  "RECORD", None,                    7),
-            ("▶",  "PLAY",   self.play_pause_toggle,   4),
-            ("◄◄", "REWIND", self.prev_track,           3),
-            ("▶▶", "FFWD",   self.skip_track,           5),
-            ("■",  "STOP",   self.stop_playlist,        6),
-            ("▲",  "EJECT",  None,                     8),
+            ("●",  "RECORD", self.save_playlist_dialog, 7),
+            ("▶",  "PLAY",   self.play_pause_toggle,     4),
+            ("◄◄", "REWIND", self.prev_track,             3),
+            ("▶▶", "FFWD",   self.skip_track,             5),
+            ("■",  "STOP",   self.stop_playlist,          6),
+            ("▲",  "EJECT",  self.load_files_dialog,     8),
         ]
 
         for symbol, label, cmd, slot_idx in transport_specs:
             btn = TransportButton(legend_group, btn_group, f"{symbol}\n{label}", cmd, self.font_family)
             self.buttons[slot_idx] = btn
-            if cmd is None:
-                btn.config(state=tk.DISABLED)
+
+        # RECORD disabilitato finché non ci sono tracce caricate (stesso
+        # criterio di PLAY); EJECT parte abilitato, come LOAD prima di lui.
+        self.buttons[7].config(state=tk.DISABLED)
 
         # ---------------------------------------------------------------
         # Stato applicazione
@@ -1957,7 +1992,10 @@ class SidTkPlayer:
     # ------------------------------------------------------------------
 
     def _update_play_pause_button(self):
-        """Aggiorna testo e simbolo del bottone PLAY/PAUSE (buttons[4])."""
+        """Aggiorna testo/simbolo di PLAY/PAUSE (buttons[4]) e lo stato di
+        RECORD (buttons[7], abilitato solo con tracce caricate — stesso
+        criterio di PLAY, chiamate sempre insieme nei punti dove cambia
+        self.tracks)."""
         btn = self.buttons[4]
         if btn is None:
             return
@@ -1968,6 +2006,8 @@ class SidTkPlayer:
             btn.config(text="▶\nRESUME", state=tk.NORMAL)
         else:
             btn.config(text="⏸\nPAUSE",  state=tk.NORMAL)
+
+        self.buttons[7].config(state=tk.NORMAL if self.tracks else tk.DISABLED)
 
     def play_pause_toggle(self):
         """Bottone PLAY/PAUSE unificato: avvia, mette in pausa o riprende."""
@@ -2309,6 +2349,50 @@ class SidTkPlayer:
         if file_path and not self._load_playlist_from_path(file_path):
             messagebox.showerror("Error", "Failed to load playlist")
 
+    def save_playlist_dialog(self):
+        """Salva su disco l'elenco delle tracce attualmente caricate come
+        file playlist (tasto RECORD), nello stesso formato letto da
+        load_playlist_file(). Chiede sempre il nome del file — nessun
+        default 'playlist.txt', per non rischiare di sovrascrivere per
+        sbaglio quella già configurata."""
+        # update_idletasks() forza il redraw subito: senza, il cambio colore
+        # resta in coda finché non si chiude il dialog bloccante sotto, e il
+        # LED sembra accendersi solo alla chiusura invece che al click.
+        self.record_led_canvas.itemconfig(self.record_led, fill=self._record_led_on)
+        self.record_led_canvas.update_idletasks()
+
+        try:
+            if not self.tracks:
+                return
+
+            file_path = filedialog.asksaveasfilename(
+                title="Save Playlist As",
+                defaultextension=".txt",
+                filetypes=[
+                    ("Playlist files", "*.txt *.cfg *.lst *.m3u *.pls"),
+                    ("All files", "*.*")
+                ]
+            )
+            if not file_path:
+                return
+
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write("# SIDPlayer Playlist\n")
+                    f.write("# Formato: percorso_file.sid:traccia\n")
+                    f.write("# Esempio: /Music/C64/song.sid:2\n\n")
+                    for i, track_path in enumerate(self.tracks):
+                        subsong = self.track_subsongs.get(i, 1)
+                        f.write(f"{track_path}:{subsong}\n")
+                log_message(f"Playlist salvata in: {file_path}")
+            except Exception as e:
+                log_message(f"Errore salvataggio playlist: {e}")
+                messagebox.showerror("Error", f"Failed to save playlist: {e}")
+        finally:
+            # Spento appena la finestra di salvataggio si chiude, sia che
+            # si sia salvato, annullato, o fallito.
+            self.record_led_canvas.itemconfig(self.record_led, fill=self._record_led_off)
+
     def load_playlist_file(self):
         """Carica il file playlist se esiste."""
         playlist_path = self.playlist_file
@@ -2565,7 +2649,7 @@ class SidTkPlayer:
 
         self.playing = True
         self.paused = False
-        self.buttons[0].config(state=tk.DISABLED)   # LOAD
+        self.buttons[8].config(state=tk.DISABLED)   # EJECT (carica file)
         self.buttons[3].config(state=tk.NORMAL)     # REWIND
         self.buttons[5].config(state=tk.NORMAL)     # FFWD
         self.buttons[6].config(state=tk.NORMAL)     # STOP
@@ -2593,7 +2677,7 @@ class SidTkPlayer:
         self.image_label.config(image=self.cover_placeholder, text="")
         self.image_source_label.config(text="")
         self._update_author_photo(None)
-        self.buttons[0].config(state=tk.NORMAL)     # LOAD
+        self.buttons[8].config(state=tk.NORMAL)     # EJECT (carica file)
         self.buttons[3].config(state=tk.DISABLED)   # REWIND
         self.buttons[5].config(state=tk.DISABLED)   # FFWD
         self.buttons[6].config(state=tk.DISABLED)   # STOP
@@ -2619,7 +2703,7 @@ class SidTkPlayer:
             self.tape_counter.reset()
             self.playing = False
             self.paused = False
-            self.buttons[0].config(state=tk.NORMAL)     # LOAD
+            self.buttons[8].config(state=tk.NORMAL)     # EJECT (carica file)
             self.buttons[3].config(state=tk.DISABLED)   # REWIND
             self.buttons[5].config(state=tk.DISABLED)   # FFWD
             self.buttons[6].config(state=tk.DISABLED)   # STOP
@@ -2873,6 +2957,57 @@ class SidTkPlayer:
         x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (460 // 2)
         y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (580 // 2)
         about_window.geometry(f"460x580+{x}+{y}")
+
+    def show_help(self):
+        """Mostra la finestra HELP: spiega i tasti trasporto meno ovvi
+        (EJECT, PLAY, RECORD) — REWIND/FFWD/STOP sono già chiari dal nome."""
+        help_window = tk.Toplevel(self.master)
+        help_window.title("Help")
+        help_window.configure(bg=C64_PALETTE["BLACK"])
+        help_window.resizable(False, False)
+
+        tk.Label(help_window, text="HELP",
+                 font=(self.font_family, 22, "bold"),
+                 fg=C64_PALETTE["LIGHT_GREEN"],
+                 bg=C64_PALETTE["BLACK"]).pack(pady=(14, 12))
+
+        entries = [
+            ("▶  PLAY", "Starts playback. Once playback has started, the "
+                        "same button pauses and resumes it."),
+            ("●  RECORD", "Saves the list of currently loaded tracks to disk "
+                          "as a new playlist file. Always asks for a "
+                          "filename, never overwrites the one already "
+                          "configured."),
+            ("▲  EJECT", "Opens the file picker to load SID files or a "
+                         "playlist."),
+        ]
+        for symbol, text in entries:
+            tk.Label(help_window, text=symbol,
+                     font=(self.font_family, 13, "bold"),
+                     fg=C64_PALETTE["CYAN"], bg=C64_PALETTE["BLACK"]
+                     ).pack(pady=(10, 3))
+            tk.Label(help_window, text=text,
+                     font=(self.font_family, 10),
+                     fg=C64_PALETTE["WHITE"], bg=C64_PALETTE["BLACK"],
+                     wraplength=380, justify="center").pack(padx=25)
+
+        close_btn = tk.Button(help_window, text="CLOSE",
+                             command=help_window.destroy,
+                             font=(self.font_family, 12, "bold"),
+                             fg=C64_PALETTE["BLACK"],
+                             bg=C64_PALETTE["LIGHT_BLUE"],
+                             padx=20, pady=5)
+        close_btn.pack(pady=(20, 16))
+
+        help_window.transient(self.master)
+        help_window.grab_set()
+        help_window.focus_set()
+
+        help_window.update_idletasks()
+        w, h = 440, help_window.winfo_reqheight()
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        help_window.geometry(f"{w}x{h}+{x}+{y}")
 
     # ------------------------------------------------------------------
 
