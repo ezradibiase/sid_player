@@ -128,7 +128,7 @@ C64_PALETTE = {
 }
 
 DATASETTE = {
-    "PLASTIC": "#C0BA99",   # corpo esterno
+    "PLASTIC": "#ECE7D3",   # corpo esterno, RGB(236,231,211)
     "BODY":    "#BBA888",   # superficie bottone
     "HI":      "#DDCFB0",   # luce top-left
     "SH":      "#7A6848",   # ombra bottom-right
@@ -143,8 +143,8 @@ DATASETTE = {
 }
 
 TRANSPORT = {
-    "BG":        "#000000",   # sfondo badge Commodore (logo + counter)
-    "BTN":       "#3a3229",   # tasto: rettangolo nero, senza testo dentro
+    "BG":        "#2D2019",   # sfondo badge "C= commodore" + barre, RGB(45,32,25)
+    "BTN":       "#3B271E",   # tasto: rettangolo nero, senza testo dentro — RGB(59,39,30)
     "BTN_ACT":   "#4a4033",   # tasto premuto
     "BTN_DIS":   "#2a2520",   # tasto disabilitato
     "LEGEND_BG": "#BBBBBB",   # striscia grigia dietro etichette parola+simbolo
@@ -1473,27 +1473,31 @@ class SidTkPlayer:
         # dell'app), font Courier fisso invece di self.font_family —
         # scelta voluta, per distinguerlo dal resto dell'interfaccia.
         # ---------------------------------------------------------------
-        _header_bg = "#795245"      # RGB(121,82,69)
+        _header_bg = "#A28F7A"      # RAL 1019 Gray Beige — prova, alternativa RAL 7022 "#4C4A44"
         _header_text = "#E3CDBA"    # RGB(227,205,186)
         _header_stripes = ["#E8412C", "#F58220", "#FDB913", "#3AA35A", "#3FA9F5"]
 
         header_frame = tk.Frame(self.canvas, bg=_header_bg, height=32)
         header_frame.place(x=0, y=0, width=self.config.window_width)
 
-        tk.Label(header_frame, text="commodore", font=("Courier", 18, "bold"),
-                 fg=_header_text, bg=_header_bg).pack(side=tk.LEFT, padx=(20, 8), pady=2)
+        # Allineato a destra, in basso: pack(side=RIGHT) accumula da destra
+        # verso sinistra, quindi si impacchetta in ordine inverso a quello
+        # visivo voluto ("64" per primo, "commodore" per ultimo) — anchor="s"
+        # per l'allineamento in basso nei 32px di altezza dell'header.
+        tk.Label(header_frame, text="64", font=("Courier", 18, "bold"),
+                 fg=_header_text, bg=_header_bg).pack(side=tk.RIGHT, padx=(8, 10), pady=2, anchor="s")
 
         _stripes_canvas = tk.Canvas(header_frame, width=90, height=22,
                                     bg=_header_bg, highlightthickness=0)
-        _stripes_canvas.pack(side=tk.LEFT, pady=5)
+        _stripes_canvas.pack(side=tk.RIGHT, pady=5, anchor="s")
         _stripe_h = 22 / len(_header_stripes)
         for _i, _color in enumerate(_header_stripes):
             _y0 = _i * _stripe_h
             _stripes_canvas.create_rectangle(0, _y0, 90, _y0 + _stripe_h,
                                              fill=_color, outline="")
 
-        tk.Label(header_frame, text="64", font=("Courier", 18, "bold"),
-                 fg=_header_text, bg=_header_bg).pack(side=tk.LEFT, padx=(8, 10), pady=2)
+        tk.Label(header_frame, text="commodore", font=("Courier", 18, "bold"),
+                 fg=_header_text, bg=_header_bg).pack(side=tk.RIGHT, padx=(20, 8), pady=2, anchor="s")
 
         # ---------------------------------------------------------------
         # Finestrella Datasette (y=40, h=330)
@@ -1767,12 +1771,15 @@ class SidTkPlayer:
         # quindi si usa una striscia da 2px al posto giusto invece che un
         # bordo completo — niente bordo a sinistra/sopra/sotto, che
         # toccherebbero rispettivamente il nero del badge e il pannello sotto.
-        bars_panel = tk.Frame(badge_frame, bg=TRANSPORT["LEGEND_BG"])
+        bars_panel = tk.Frame(badge_frame, bg=TRANSPORT["BG"])
         bars_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(50, 0))
         tk.Frame(bars_panel, bg="#000000", width=2).pack(side=tk.RIGHT, fill=tk.Y)
 
+        # fg era nero (bars su pannello grigio chiaro): con lo sfondo ora
+        # scuro come il resto del badge, servono barre chiare per restare
+        # visibili — stesso colore del testo "C= commodore" accanto.
         tk.Label(bars_panel, text="▉▊▋▌▍▎▏",
-                 fg="#000000", bg=TRANSPORT["LEGEND_BG"],
+                 fg=_badge_col, bg=TRANSPORT["BG"],
                  font=("Courier", 34, "bold")).pack(expand=True, padx=(4, 2))
 
         # Striscia grigia con le etichette (parola+simbolo) — la targhetta
