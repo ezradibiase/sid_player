@@ -1467,13 +1467,33 @@ class SidTkPlayer:
             self.now_playing.update(title="SIDPLAYER C64", artist="", is_playing=False)
 
         # ---------------------------------------------------------------
-        # Header (y=0, h=32)
+        # Header (y=0, h=32) — badge "commodore [strisce] 64" in stile
+        # scocca originale, al posto della semplice scritta "SIDPLAYER
+        # C64". Colori indicati dall'utente (non dalla palette standard
+        # dell'app), font Courier fisso invece di self.font_family —
+        # scelta voluta, per distinguerlo dal resto dell'interfaccia.
         # ---------------------------------------------------------------
-        header_frame = tk.Frame(self.canvas, bg=C64_PALETTE["BLUE"], height=32)
+        _header_bg = "#795245"      # RGB(121,82,69)
+        _header_text = "#E3CDBA"    # RGB(227,205,186)
+        _header_stripes = ["#E8412C", "#F58220", "#FDB913", "#3AA35A", "#3FA9F5"]
+
+        header_frame = tk.Frame(self.canvas, bg=_header_bg, height=32)
         header_frame.place(x=0, y=0, width=self.config.window_width)
-        tk.Label(header_frame, text="SIDPLAYER C64",
-                 font=(self.font_family, 14, "bold"),
-                 fg=C64_PALETTE["WHITE"], bg=C64_PALETTE["BLUE"]).place(x=20, y=6)
+
+        tk.Label(header_frame, text="commodore", font=("Courier", 18, "bold"),
+                 fg=_header_text, bg=_header_bg).pack(side=tk.LEFT, padx=(20, 8), pady=2)
+
+        _stripes_canvas = tk.Canvas(header_frame, width=90, height=22,
+                                    bg=_header_bg, highlightthickness=0)
+        _stripes_canvas.pack(side=tk.LEFT, pady=5)
+        _stripe_h = 22 / len(_header_stripes)
+        for _i, _color in enumerate(_header_stripes):
+            _y0 = _i * _stripe_h
+            _stripes_canvas.create_rectangle(0, _y0, 90, _y0 + _stripe_h,
+                                             fill=_color, outline="")
+
+        tk.Label(header_frame, text="64", font=("Courier", 18, "bold"),
+                 fg=_header_text, bg=_header_bg).pack(side=tk.LEFT, padx=(8, 10), pady=2)
 
         # ---------------------------------------------------------------
         # Finestrella Datasette (y=40, h=330)
