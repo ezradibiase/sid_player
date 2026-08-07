@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # I filtri "paths" non si applicano ai push di tag (solo ai branch): un
+    # push di tag v* fa quindi sempre partire la build, indipendentemente
+    # dai file toccati — è il trigger della release.
+    tags: ["v*"]
     paths:
       - "sidplayer.py"
       - "stil_reader.py"
@@ -27,6 +31,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write  # necessario solo per creare la Release sui push di tag
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,3 +110,12 @@ jobs:
           name: SIDPlayer-windows
           path: scripts/dist/SIDPlayer.exe
           if-no-files-found: error
+
+      # Solo sui push di tag (es. v6.5): crea/aggiorna la Release GitHub e ci
+      # allega l'exe. Su workflow_dispatch/push a main/PR questo step non gira.
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: scripts/dist/SIDPlayer.exe
+          generate_release_notes: true
