@@ -950,6 +950,12 @@ class AudioEngine:
                 pass
             self._process = None
 
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=3)
+        self._thread = None
+
+        self._cleanup_fifo()
+
     def pause(self):
         """Sospende la riproduzione via SIGSTOP (solo Unix/macOS)."""
         if not HAS_PROCESS_PAUSE:
@@ -973,12 +979,6 @@ class AudioEngine:
             except (ProcessLookupError, PermissionError, OSError):
                 pass
         return False
-
-        if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=3)
-        self._thread = None
-
-        self._cleanup_fifo()
 
     @property
     def is_active(self):
@@ -1910,9 +1910,13 @@ class SidTkPlayer:
         # Bordo verde
         draw.rectangle([0, 0, w-1, h-1], outline='#AAFF66', width=1)
         # Testo centrato
+        _courier_path = (
+            r"C:\Windows\Fonts\cour.ttf" if IS_WINDOWS
+            else "/System/Library/Fonts/Supplemental/Courier New.ttf"
+        )
         try:
-            font_big  = ImageFont.truetype("/System/Library/Fonts/Supplemental/Courier New.ttf", 22)
-            font_small = ImageFont.truetype("/System/Library/Fonts/Supplemental/Courier New.ttf", 13)
+            font_big  = ImageFont.truetype(_courier_path, 22)
+            font_small = ImageFont.truetype(_courier_path, 13)
         except Exception:
             font_big  = ImageFont.load_default()
             font_small = font_big
