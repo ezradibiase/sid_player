@@ -41,6 +41,41 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # sidplayfp non ha un .exe Windows scaricabile "pronto": l'unico modo
+      # pratico è il pacchetto MSYS2/mingw64. Lo installiamo solo qui in CI
+      # (build-time) e lo bundliamo dentro SIDPlayer.exe — l'utente finale
+      # scarica un solo file e non deve installare nulla.
+      - name: Install sidplayfp via MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-sidplayfp
+            mingw-w64-x86_64-ntldd
+
+      - name: Stage sidplayfp.exe + runtime DLLs for bundling
+        shell: msys2 {0}
+        run: |
+          set -e
+          DEST="$(cygpath -u "$GITHUB_WORKSPACE")/scripts/vendor/sidplayfp-windows"
+          mkdir -p "$DEST"
+          cp /mingw64/bin/sidplayfp.exe "$DEST/"
+          # Path esatto del file di licenza non verificato: se il pacchetto
+          # MSYS2 lo installa altrove questo passo semplicemente non copia
+          # nulla (il build non fallisce, ma va controllato nel primo run).
+          cp /mingw64/share/licenses/sidplayfp/COPYING "$DEST/COPYING-sidplayfp.txt" 2>/dev/null || \
+            cp /mingw64/share/doc/sidplayfp/COPYING "$DEST/COPYING-sidplayfp.txt" 2>/dev/null || \
+            echo "ATTENZIONE: file di licenza sidplayfp non trovato nei path noti"
+          # Dipendenze DLL scoperte a runtime (non hardcoded) — solo quelle
+          # fornite da mingw64, le DLL di sistema Windows sono già presenti
+          # su qualsiasi macchina.
+          for dll in $(ntldd -R /mingw64/bin/sidplayfp.exe | awk '{print $3}' | grep -i '^/mingw64/'); do
+            cp "$dll" "$DEST/"
+          done
+          echo "--- Contenuto bundle sidplayfp ---"
+          ls -la "$DEST"
+
       - name: Build with PyInstaller
         working-directory: scripts
         run: pyinstaller SIDPlayer.spec

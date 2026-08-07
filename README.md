@@ -62,9 +62,16 @@ Clicca **EJECT**, scegli un file `.sid` (o una playlist), premi **PLAY**. Fine.
 > Windows è in **beta** — il codice ha fallback per quelle piattaforme, ma non è mai stato
 > testato in profondità. Segnala problemi su [GitHub Issues](https://github.com/ezradibiase/sid_player/issues).
 
-Su **Windows**: scarica sidplayfp da [SourceForge](https://sourceforge.net/projects/sidplay-residfp/),
-poi doppio clic su `launchers/start_sidplayer.bat`. Su **macOS** puoi anche rendere
-eseguibile `launchers/start_sidplayer.command` e aprirlo dal Finder.
+Su **Windows**: se usi l'eseguibile `SIDPlayer.exe` compilato dalla CI (workflow
+"Build Windows" su GitHub Actions), `sidplayfp` è già incluso — nessuna installazione
+richiesta. Se invece esegui da sorgente (`python sidplayer.py`), sidplayfp non è
+disponibile come pacchetto Windows standalone: va installato tramite
+[MSYS2](https://www.msys2.org/) (shell **MSYS2 MinGW64**, non quella base) con
+`pacman -S mingw-w64-x86_64-sidplayfp`, poi imposta il percorso completo in
+`sidplayer.cfg` (vedi [Configurazione](#configurazione)) oppure aggiungi
+`C:\msys64\mingw64\bin` al PATH. Poi doppio clic su `launchers/start_sidplayer.bat`.
+Su **macOS** puoi anche rendere eseguibile `launchers/start_sidplayer.command` e
+aprirlo dal Finder.
 
 Il font [C64 Pro Mono](https://github.com/mborgbrant/c64-pro-mono) è opzionale ma
 consigliato: senza, viene usato Courier come fallback.
@@ -423,6 +430,11 @@ Se è in un percorso non standard, impostalo in `sidplayer.cfg`:
 [player]
 sidplay_cmd = /opt/homebrew/bin/sidplayfp
 ```
+
+Su Windows, l'eseguibile `SIDPlayer.exe` compilato dalla CI include già
+`sidplayfp.exe` bundlato e non dovrebbe mai dare questo errore. Se lo vedi
+comunque, o se stai eseguendo da sorgente, vedi la nota su MSYS2 nel
+[Quick start](#quick-start).
 </details>
 
 <details>
