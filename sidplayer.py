@@ -116,7 +116,15 @@ except ImportError:
 
 VERSION = "v6.4"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
-FONT_FALLBACK = "Courier"
+# "Courier" su Windows è il vecchio font bitmap di sistema (non scalabile): a
+# dimensioni diverse da quelle native viene ridimensionato in modo grezzo,
+# causando testo/allineamenti irregolari. "Courier New" è l'equivalente
+# TrueType corretto per quella piattaforma.
+FONT_FALLBACK = "Courier New" if IS_WINDOWS else "Courier"
+# Font fisso "vecchio terminale" usato deliberatamente per header/contatore/
+# barre anche quando C64 Pro Mono è disponibile — scelta estetica, non un
+# fallback.
+ACCENT_FONT = FONT_FALLBACK
 CONFIG_FILE = "sidplayer.cfg"
 
 C64_PALETTE = {
@@ -158,6 +166,29 @@ def get_available_font(preferred_font, fallback_font):
         return preferred_font
     except:
         return fallback_font
+
+
+def _app_icon_path(filename):
+    """Risolve il path di un'icona sia in esecuzione da sorgente (assets/)
+    sia da bundle PyInstaller (dove viene copiata nella root, vedi .spec)."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    for path in (os.path.join(base_dir, filename),
+                 os.path.join(base_dir, "assets", filename)):
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def _bundled_sidplayfp_path():
+    """Su Windows, se il .exe distribuito include sidplayfp.exe (scaricato
+    in CI via MSYS2, vedi scripts/SIDPlayer.spec), lo trova accanto a sé —
+    l'utente non deve installarlo separatamente. None altrove/se assente
+    (es. esecuzione da sorgente senza il bundle)."""
+    if not IS_WINDOWS:
+        return None
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate = os.path.join(base_dir, "sidplayfp.exe")
+    return candidate if os.path.exists(candidate) else None
 
 
 class Config:
@@ -303,7 +334,15 @@ class Config:
 
     @property
     def sidplay_cmd(self):
-        return self.get('player', 'sidplay_cmd')
+        configured = self.get('player', 'sidplay_cmd')
+        # Solo se l'utente non ha personalizzato il default 'sidplayfp':
+        # un valore esplicito nel cfg (es. un path assoluto voluto) vince
+        # sempre sul bundle.
+        if configured == self.DEFAULTS['player']['sidplay_cmd']:
+            bundled = _bundled_sidplayfp_path()
+            if bundled:
+                return bundled
+        return configured
 
     @property
     def shuffle(self):
@@ -1226,7 +1265,7 @@ class TapeCounter:
     _PAD     = 4
     _FG      = "#b0afb4"
     _BG      = "#000000"
-    _FONT    = ("Courier", 13, "bold")
+    _FONT    = (ACCENT_FONT, 13, "bold")
     _ANIM_STEPS = 8
     _ANIM_MS    = 100   # ms per frame → 800 ms animazione totale
     _TICK_MS    = 2000  # ms per tick (~π×3cm / 4.76cm/s ≈ 1.98s)
@@ -1396,6 +1435,24 @@ class SidTkPlayer:
 
         # Imposta la finestra
         self.master.title("SIDPLAYER C64")
+        # Su macOS l'icona arriva già dal bundle .app (Info.plist); su
+        # Windows/Linux tk non la imposta da solo — di default mostra la
+        # piuma/feather generica di Tk in barra del titolo e nella taskbar.
+        if IS_WINDOWS:
+            ico_path = _app_icon_path("commodore.ico")
+            if ico_path:
+                try:
+                    self.master.iconbitmap(ico_path)
+                except tk.TclError:
+                    pass
+        elif IS_LINUX:
+            png_path = _app_icon_path("commodore.png")
+            if png_path:
+                try:
+                    self._icon_photo = tk.PhotoImage(file=png_path)  # riferimento vivo, serve a Tk
+                    self.master.iconphoto(True, self._icon_photo)
+                except tk.TclError:
+                    pass
         self.master.configure(bg=DATASETTE["PLASTIC"])
         self.master.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.master.resizable(self.config.window_resizable, self.config.window_resizable)
@@ -1484,7 +1541,7 @@ class SidTkPlayer:
         # verso sinistra, quindi si impacchetta in ordine inverso a quello
         # visivo voluto ("64" per primo, "commodore" per ultimo) — anchor="s"
         # per l'allineamento in basso nei 32px di altezza dell'header.
-        tk.Label(header_frame, text="64", font=("Courier", 18, "bold"),
+        tk.Label(header_frame, text="64", font=(ACCENT_FONT, 18, "bold"),
                  fg=_header_text, bg=_header_bg).pack(side=tk.RIGHT, padx=(8, 10), pady=2, anchor="s")
 
         _stripes_canvas = tk.Canvas(header_frame, width=90, height=22,
@@ -1496,7 +1553,7 @@ class SidTkPlayer:
             _stripes_canvas.create_rectangle(0, _y0, 90, _y0 + _stripe_h,
                                              fill=_color, outline="")
 
-        tk.Label(header_frame, text="commodore", font=("Courier", 18, "bold"),
+        tk.Label(header_frame, text="commodore", font=(ACCENT_FONT, 18, "bold"),
                  fg=_header_text, bg=_header_bg).pack(side=tk.RIGHT, padx=(20, 8), pady=2, anchor="s")
 
         # ---------------------------------------------------------------
@@ -1780,7 +1837,7 @@ class SidTkPlayer:
         # visibili — stesso colore del testo "C= commodore" accanto.
         tk.Label(bars_panel, text="▉▊▋▌▍▎▏",
                  fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=("Courier", 34, "bold")).pack(expand=True, padx=(4, 2))
+                 font=(ACCENT_FONT, 34, "bold")).pack(expand=True, padx=(4, 2))
 
         # Striscia grigia con le etichette (parola+simbolo) — la targhetta
         # RECORD/PLAY/REWIND/... stampata sulla scocca, separata dai tasti

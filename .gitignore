@@ -14,6 +14,7 @@ Top100_corrected.lst
 archive/
 scripts/build/
 scripts/dist/
+scripts/vendor/
 
 # Runtime
 __pycache__/
