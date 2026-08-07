@@ -19,6 +19,7 @@ import tempfile
 import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
+from tkinter import font as tkfont
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 import configparser
@@ -1035,6 +1036,14 @@ class AudioEngine:
         cmd.append(sid_path)
         return cmd
 
+    def _popen_kwargs(self):
+        """Su Windows, sidplayfp.exe è un'app console: lanciata da una GUI
+        senza console (come questa) Windows le apre comunque una finestra
+        console visibile propria, che passa in primo piano. CREATE_NO_WINDOW
+        la sopprime — non esiste su macOS/Linux, da qui il getattr."""
+        flag = getattr(subprocess, "CREATE_NO_WINDOW", None)
+        return {"creationflags": flag} if flag is not None else {}
+
     def _play_via_fifo(self, sid_path, subsong, sidplay_cmd, on_done_callback):
         # sidplayfp aggiunge automaticamente .wav al nome del file
         fifo_base = os.path.join(tempfile.gettempdir(), f"sidplayer_{os.getpid()}")
@@ -1058,6 +1067,7 @@ class AudioEngine:
                 self._build_cmd(sidplay_cmd, subsong, f"-w{fifo_base}", sid_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                **self._popen_kwargs(),
             )
         except FileNotFoundError:
             self._cleanup_fifo()
@@ -1148,6 +1158,7 @@ class AudioEngine:
             self._build_cmd(sidplay_cmd, subsong, None, sid_path),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            **self._popen_kwargs(),
         )
 
         def _monitor():
@@ -1180,6 +1191,7 @@ class AudioEngine:
                 self._build_cmd(sidplay_cmd, subsong, f"-w{tmp_base}", sid_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                **self._popen_kwargs(),
             )
         except FileNotFoundError:
             self._fifo_path = None
@@ -1789,6 +1801,22 @@ class SidTkPlayer:
                                    relief="ridge", bd=4)
         transport_outer.place(x=20, y=426, width=600, height=150)
 
+        # Larghezza colonna tasto/etichetta calcolata sul font davvero
+        # installato, non indovinata in pixel fissi: C64 Pro Mono ha glifi
+        # molto più larghi del fallback Courier usato in fase di test, e la
+        # stessa larghezza "giusta" su macOS può risultare troppo stretta su
+        # Windows. Include anche "PAUSE"/"RESUME", testi dinamici del tasto
+        # PLAY. Non riduce mai sotto il minimo _W di default.
+        _legend_words = ["RECORD", "PLAY", "PAUSE", "RESUME", "REWIND", "FFWD", "STOP", "EJECT"]
+        _legend_font = tkfont.Font(root=self.master, family=self.font_family, size=8, weight="bold")
+        _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
+        TransportButton._W = max(TransportButton._W, _needed_w)
+        # La "targhetta" (bar_plate) deve contenere le 6 colonne alla nuova
+        # larghezza — 380px era tarato sulla larghezza minima di default,
+        # qui si allarga di conseguenza (con un margine di sicurezza), senza
+        # mai superare i 600px di transport_outer.
+        _bar_plate_w = min(600, max(380, 6 * (TransportButton._W + 16) + 20))
+
         # Riga superiore: la "targhetta" nero+grigio non copre tutta la
         # larghezza come il resto (come nella foto del Datasette originale,
         # dove la placca è incassata nella scocca beige, non a tutta banda) —
@@ -1799,7 +1827,7 @@ class SidTkPlayer:
         top_row.pack(fill=tk.X, side=tk.TOP)
         top_row.pack_propagate(False)
 
-        bar_plate = tk.Frame(top_row, width=380, height=79, bg=DATASETTE["PLASTIC"])
+        bar_plate = tk.Frame(top_row, width=_bar_plate_w, height=79, bg=DATASETTE["PLASTIC"])
         # place() invece di pack(): il counter, impacchettato a destra nella
         # stessa riga, ridurrebbe la cavità disponibile e sposterebbe il
         # centro del pack — place() si centra sulla larghezza intera di
@@ -2299,7 +2327,10 @@ class SidTkPlayer:
         dialog = tk.Toplevel(self.master)
         dialog.title("LOAD")
         dialog.configure(bg=C64_PALETTE["BLACK"])
-        dialog.geometry("350x180")
+        # Nessuna geometry() fissa qui: con font diversi da quello tarato
+        # su macOS (es. C64 Pro Mono più largo su Windows) una dimensione
+        # fissa taglia i pulsanti — la finestra si dimensiona sul contenuto
+        # reale più sotto, dopo aver impacchettato i widget.
         dialog.resizable(False, False)
         dialog.transient(self.master)
         dialog.grab_set()
@@ -2341,10 +2372,15 @@ class SidTkPlayer:
                                 relief="raised", bd=4, padx=15, pady=5)
         btn_playlist.pack(side=tk.LEFT, padx=10)
 
+        # Dimensione calcolata sul contenuto reale (winfo_reqwidth/height,
+        # dopo update_idletasks) invece di un valore fisso — l'unico modo
+        # per non tagliare i pulsanti indipendentemente dal font/piattaforma.
         dialog.update_idletasks()
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (350 // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (180 // 2)
-        dialog.geometry(f"350x180+{x}+{y}")
+        w = dialog.winfo_reqwidth() + 20
+        h = dialog.winfo_reqheight() + 10
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
 
     def _load_track_list(self, files, via, append=False):
         """Imposta la lista di tracce e aggiorna la UI di conseguenza.
@@ -3252,6 +3288,22 @@ def main():
     config = Config()
     log_message(f"Config: {config.config_file}")
     config.ensure_directories()
+
+    if IS_WINDOWS:
+        # Senza dichiararsi DPI-aware, Windows virtualizza/ridimensiona
+        # l'intera finestra a livello di sistema (bitmap stretch) invece di
+        # lasciare che Tk calcoli font e geometria sulla risoluzione reale:
+        # a scaling frazionario (125%/150%) il testo può risultare troppo
+        # grande rispetto ai contenitori a larghezza fissa dell'interfaccia,
+        # tarati su macOS. Va chiamato prima di creare la finestra Tk.
+        try:
+            import ctypes
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE
+        except Exception:
+            try:
+                ctypes.windll.user32.SetProcessDPIAware()  # fallback Windows più vecchi
+            except Exception:
+                pass
 
     root = tk.Tk()
     app = SidTkPlayer(root, config=config)
