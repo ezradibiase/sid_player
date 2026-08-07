@@ -67,12 +67,30 @@ jobs:
           cp /mingw64/share/licenses/sidplayfp/COPYING "$DEST/COPYING-sidplayfp.txt" 2>/dev/null || \
             cp /mingw64/share/doc/sidplayfp/COPYING "$DEST/COPYING-sidplayfp.txt" 2>/dev/null || \
             echo "ATTENZIONE: file di licenza sidplayfp non trovato nei path noti"
+
+          echo "--- Output grezzo ntldd (debug, per verificare il formato path) ---"
+          ntldd -R /mingw64/bin/sidplayfp.exe || true
+
           # Dipendenze DLL scoperte a runtime (non hardcoded) — solo quelle
           # fornite da mingw64, le DLL di sistema Windows sono già presenti
-          # su qualsiasi macchina.
-          for dll in $(ntldd -R /mingw64/bin/sidplayfp.exe | awk '{print $3}' | grep -i '^/mingw64/'); do
-            cp "$dll" "$DEST/"
+          # su qualsiasi macchina. cygpath normalizza il path indipendentemente
+          # dal formato stampato da ntldd (drive letter, backslash, ecc.); il
+          # controllo -f prima della copia evita di inciampare su eventuali
+          # librerie "not found" nell'output.
+          echo "--- Copia DLL di runtime ---"
+          ntldd -R /mingw64/bin/sidplayfp.exe 2>/dev/null | grep '=>' | while IFS= read -r line; do
+            dllpath=$(echo "$line" | sed -E 's/^.*=> *//; s/ *\(0x[0-9A-Fa-f]+\)[[:space:]]*$//')
+            unixpath=$(cygpath -u "$dllpath" 2>/dev/null || echo "$dllpath")
+            case "$unixpath" in
+              /c/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/*) continue ;;
+            esac
+            if [ -f "$unixpath" ]; then
+              cp "$unixpath" "$DEST/" && echo "copiato: $unixpath"
+            else
+              echo "SALTATO (non trovato su disco): $unixpath (originale: $dllpath)"
+            fi
           done
+
           echo "--- Contenuto bundle sidplayfp ---"
           ls -la "$DEST"
 
