@@ -1,0 +1,53 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "sidplayer.py"
+      - "stil_reader.py"
+      - "gb64_reader.py"
+      - "nowplaying_mac.py"
+      - "requirements.txt"
+      - "scripts/SIDPlayer.spec"
+      - "assets/**"
+      - ".github/workflows/build-windows.yml"
+  pull_request:
+    paths:
+      - "sidplayer.py"
+      - "stil_reader.py"
+      - "gb64_reader.py"
+      - "nowplaying_mac.py"
+      - "requirements.txt"
+      - "scripts/SIDPlayer.spec"
+      - "assets/**"
+      - ".github/workflows/build-windows.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        working-directory: scripts
+        run: pyinstaller SIDPlayer.spec
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SIDPlayer-windows
+          path: scripts/dist/SIDPlayer.exe
+          if-no-files-found: error
