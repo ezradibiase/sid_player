@@ -1430,14 +1430,23 @@ class TransportButton:
         symbol, word = (parts[0], parts[1]) if len(parts) == 2 else ("", parts[0])
         self.label.config(text=f"{word}\n{symbol}")
 
-    def resize(self, width, font_size):
-        """Ridimensiona colonna (etichetta+tasto) e font della legenda dopo
-        la costruzione — usato quando una verifica sulla posizione reale dei
-        widget (non una stima) rileva che la targhetta invade lo spazio del
-        counter accanto, e serve rimpicciolire ulteriormente."""
+    def resize(self, width, font_size, padx=None):
+        """Ridimensiona colonna (etichetta+tasto), font della legenda e
+        spaziatura orizzontale dopo la costruzione — usato quando una
+        verifica sulla posizione reale dei widget (non una stima) rileva
+        che la targhetta invade lo spazio del counter accanto, e serve
+        stringere ulteriormente. padx=None lascia la spaziatura invariata
+        (test reale: sotto una certa dimensione il font C64 Pro Mono su
+        Windows smette di rimpicciolirsi — probabile limite di rendering
+        del font stesso — quindi ridurre solo la dimensione non basta
+        sempre; la spaziatura tra colonne è l'altra leva, indipendente dal
+        font, sempre efficace)."""
         self._label_holder.config(width=width)
         self._holder.config(width=width)
         self.label.config(font=(self._font_family, font_size, "bold"))
+        if padx is not None:
+            self._label_holder.pack_configure(padx=padx)
+            self._holder.pack_configure(padx=padx)
 
     def _on_press(self, _event):
         if self._state == tk.NORMAL:
@@ -1820,30 +1829,16 @@ class SidTkPlayer:
 
         # Larghezza colonna tasto/etichetta calcolata sul font davvero
         # installato, non indovinata in pixel fissi: C64 Pro Mono ha glifi
-        # molto più larghi del fallback Courier usato nei primi test. Se a
-        # 8pt le 6 colonne non entrano nello spazio disponibile (successo su
-        # Windows, dove il font misura più largo che su macOS), si riduce la
-        # dimensione invece di far traboccare la riga oltre il bordo della
-        # finestra — la finestra ha dimensione fissa, allargarla sballerebbe
-        # tutto il resto del layout. Include "PAUSE"/"RESUME", testi dinamici
-        # del tasto PLAY.
+        # molto più larghi del fallback Courier usato nei primi test. Include
+        # "PAUSE"/"RESUME", testi dinamici del tasto PLAY.
         #
-        # Il vincolo NON è la larghezza di transport_outer (600px): bar_plate
-        # è centrata con place(relx=0.5) sull'INTERA riga, quindi cresce in
-        # entrambe le direzioni — se supera un certo limite finisce comunque
-        # a sbattere contro il counter, impacchettato a parte sulla destra
-        # (visto succedere nei test: EJECT finiva coperto dal counter, anche
-        # se la riga restava "dentro" i 600px). Il budget va quindi calcolato
-        # sullo spazio libero *simmetrico* attorno al centro, al netto di
-        # quanto occupa davvero il counter — misurato sul font anche lui,
-        # non un numero indovinato.
-        _counter_font = tkfont.Font(root=self.master, family=self.font_family,
-                                    size=6, weight="bold")
-        _counter_w = max(56, 10 + _counter_font.measure("COUNTER")) + 10
-
+        # Questa è solo una stima di PARTENZA (basata sulla larghezza di
+        # transport_outer, 600px, ignorando il counter) — il posizionamento
+        # vero, incluso lo spazio occupato dal counter, si verifica e
+        # corregge DOPO aver costruito tutto (vedi sotto): calcolare a
+        # priori quanto conta il counter si è dimostrato inaffidabile.
         _legend_words = ["RECORD", "PLAY", "PAUSE", "RESUME", "REWIND", "FFWD", "STOP", "EJECT"]
-        _bar_plate_cap = max(380, 2 * (600 / 2 - _counter_w))
-        _MAX_ROW_W = _bar_plate_cap - 20
+        _MAX_ROW_W = 590
         self._transport_legend_size = 8
         while True:
             _legend_font = tkfont.Font(root=self.master, family=self.font_family,
@@ -1854,11 +1849,7 @@ class SidTkPlayer:
                 break
             self._transport_legend_size -= 1
         TransportButton._W = _col_w
-        # La "targhetta" (bar_plate) deve contenere le 6 colonne alla nuova
-        # larghezza — 380px era tarato sulla larghezza minima di default,
-        # qui si allarga di conseguenza (con un margine di sicurezza), senza
-        # mai invadere lo spazio del counter calcolato sopra.
-        _bar_plate_w = min(_bar_plate_cap, max(380, 6 * (TransportButton._W + 16) + 20))
+        _bar_plate_w = max(380, 6 * (TransportButton._W + 16) + 20)
 
         # Riga superiore: la "targhetta" nero+grigio non copre tutta la
         # larghezza come il resto (come nella foto del Datasette originale,
@@ -1989,28 +1980,40 @@ class SidTkPlayer:
         # counter, poi lo stimava ma non abbastanza) — bar_plate è centrata
         # sull'intera riga e può comunque invadere lo spazio del counter se
         # il font reale (C64 Pro Mono su Windows) è più largo di quanto
-        # misurato. Se dopo il layout risulta che invade davvero, riduce
-        # ulteriormente finché non collima più, o fino a un pavimento minimo.
+        # misurato.
+        #
+        # Due leve, in ordine: prima la spaziatura tra colonne (padx, 8px di
+        # default), poi la dimensione del font. La spaziatura viene prima
+        # perché è pixel puro, sempre efficace; il font no — test reale ha
+        # mostrato che sotto una certa soglia (5-6pt) il rendering di C64 Pro
+        # Mono su Windows smette di rimpicciolirsi (probabile limite del
+        # font stesso), quindi ridurlo oltre non serve più a niente.
         self.master.update_idletasks()
-        _shrink_attempts = 8
+        _shrink_attempts = 12
+        _legend_padx = 8
         while _shrink_attempts > 0:
             _overlap = (legend_row.winfo_rootx() + legend_row.winfo_width()
                         > counter_frame.winfo_rootx())
-            if not _overlap or self._transport_legend_size <= 5:
+            if not _overlap:
                 break
-            self._transport_legend_size -= 1
-            _legend_font = tkfont.Font(root=self.master, family=self.font_family,
-                                       size=self._transport_legend_size, weight="bold")
-            _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
-            TransportButton._W = max(40, _needed_w)
-            bar_plate.config(width=min(_bar_plate_cap,
-                                       6 * (TransportButton._W + 16) + 20))
+            if _legend_padx > 3:
+                _legend_padx -= 1
+            elif self._transport_legend_size > 5:
+                self._transport_legend_size -= 1
+                _legend_font = tkfont.Font(root=self.master, family=self.font_family,
+                                           size=self._transport_legend_size, weight="bold")
+                _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
+                TransportButton._W = max(40, _needed_w)
+            else:
+                break  # nessun'altra leva da tirare
+            bar_plate.config(width=max(380, 6 * (TransportButton._W + 2 * _legend_padx) + 20))
             for btn in _transport_buttons:
-                btn.resize(TransportButton._W, self._transport_legend_size)
+                btn.resize(TransportButton._W, self._transport_legend_size, padx=_legend_padx)
             self.master.update_idletasks()
             _shrink_attempts -= 1
         log_message(f"Transport bar: legend_size={self._transport_legend_size} "
-                    f"col_w={TransportButton._W} bar_plate_w={bar_plate.winfo_width()} "
+                    f"padx={_legend_padx} col_w={TransportButton._W} "
+                    f"bar_plate_w={bar_plate.winfo_width()} "
                     f"legend_right={legend_row.winfo_rootx() + legend_row.winfo_width()} "
                     f"counter_left={counter_frame.winfo_rootx()} "
                     f"shrink_attempts_left={_shrink_attempts}")
