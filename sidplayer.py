@@ -1391,21 +1391,23 @@ class TransportButton:
         # Altezza esplicita: senza, pack_propagate(False) blocca il frame
         # alla dimensione minima di default (quasi 0px) invece di adattarsi
         # al testo — l'etichetta risultava invisibile, non solo piccola.
-        label_holder = tk.Frame(legend_row, width=self._W, height=26,
-                                bg=TRANSPORT["LEGEND_BG"])
-        label_holder.pack(side=tk.LEFT, padx=8, pady=(3, 2))
-        label_holder.pack_propagate(False)
+        self._font_family = font_family
+        self._label_holder = tk.Frame(legend_row, width=self._W, height=26,
+                                      bg=TRANSPORT["LEGEND_BG"])
+        self._label_holder.pack(side=tk.LEFT, padx=8, pady=(3, 2))
+        self._label_holder.pack_propagate(False)
 
-        self.label = tk.Label(label_holder, font=(font_family, font_size, "bold"),
+        self.label = tk.Label(self._label_holder, font=(font_family, font_size, "bold"),
                                justify="center", pady=0,
                                fg=DATASETTE["TEXT"], bg=TRANSPORT["LEGEND_BG"])
         self.label.pack(expand=True)
         self._set_label_text(text)
 
-        holder = tk.Frame(button_row, width=self._W, height=self._H,
-                          bg=DATASETTE["PLASTIC"])
-        holder.pack(side=tk.LEFT, padx=8, pady=4)
-        holder.pack_propagate(False)
+        self._holder = tk.Frame(button_row, width=self._W, height=self._H,
+                                bg=DATASETTE["PLASTIC"])
+        self._holder.pack(side=tk.LEFT, padx=8, pady=4)
+        self._holder.pack_propagate(False)
+        holder = self._holder
 
         self.btn = tk.Label(holder, bg=TRANSPORT["BTN"], relief="raised", bd=2)
         self.btn.pack(fill=tk.BOTH, expand=True)
@@ -1419,6 +1421,15 @@ class TransportButton:
         parts = text.split("\n", 1)
         symbol, word = (parts[0], parts[1]) if len(parts) == 2 else ("", parts[0])
         self.label.config(text=f"{word}\n{symbol}")
+
+    def resize(self, width, font_size):
+        """Ridimensiona colonna (etichetta+tasto) e font della legenda dopo
+        la costruzione — usato quando una verifica sulla posizione reale dei
+        widget (non una stima) rileva che la targhetta invade lo spazio del
+        counter accanto, e serve rimpicciolire ulteriormente."""
+        self._label_holder.config(width=width)
+        self._holder.config(width=width)
+        self.label.config(font=(self._font_family, font_size, "bold"))
 
     def _on_press(self, _event):
         if self._state == tk.NORMAL:
@@ -1958,10 +1969,43 @@ class SidTkPlayer:
             ("▲",  "EJECT",  self.load_files_dialog,     8),
         ]
 
+        _transport_buttons = []
         for symbol, label, cmd, slot_idx in transport_specs:
             btn = TransportButton(legend_group, btn_group, f"{symbol}\n{label}", cmd,
                                   self.font_family, font_size=self._transport_legend_size)
             self.buttons[slot_idx] = btn
+            _transport_buttons.append(btn)
+
+        # Verifica sulla posizione REALE dei widget, non su una stima a
+        # priori (già sbagliata due volte: prima ignorava del tutto il
+        # counter, poi lo stimava ma non abbastanza) — bar_plate è centrata
+        # sull'intera riga e può comunque invadere lo spazio del counter se
+        # il font reale (C64 Pro Mono su Windows) è più largo di quanto
+        # misurato. Se dopo il layout risulta che invade davvero, riduce
+        # ulteriormente finché non collima più, o fino a un pavimento minimo.
+        self.master.update_idletasks()
+        _shrink_attempts = 8
+        while _shrink_attempts > 0:
+            _overlap = (legend_row.winfo_rootx() + legend_row.winfo_width()
+                        > counter_frame.winfo_rootx())
+            if not _overlap or self._transport_legend_size <= 5:
+                break
+            self._transport_legend_size -= 1
+            _legend_font = tkfont.Font(root=self.master, family=self.font_family,
+                                       size=self._transport_legend_size, weight="bold")
+            _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
+            TransportButton._W = max(40, _needed_w)
+            bar_plate.config(width=min(_bar_plate_cap,
+                                       6 * (TransportButton._W + 16) + 20))
+            for btn in _transport_buttons:
+                btn.resize(TransportButton._W, self._transport_legend_size)
+            self.master.update_idletasks()
+            _shrink_attempts -= 1
+        log_message(f"Transport bar: legend_size={self._transport_legend_size} "
+                    f"col_w={TransportButton._W} bar_plate_w={bar_plate.winfo_width()} "
+                    f"legend_right={legend_row.winfo_rootx() + legend_row.winfo_width()} "
+                    f"counter_left={counter_frame.winfo_rootx()} "
+                    f"shrink_attempts_left={_shrink_attempts}")
 
         # RECORD disabilitato finché non ci sono tracce caricate (stesso
         # criterio di PLAY); EJECT parte abilitato, come LOAD prima di lui.
