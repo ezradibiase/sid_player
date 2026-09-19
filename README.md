@@ -442,7 +442,7 @@ comunque, o se stai eseguendo da sorgente, vedi la nota su MSYS2 nel
 
 - Verifica che le API key siano configurate in `sidplayer.cfg`
 - Controlla la connessione internet
-- I log si trovano in `sidplayer_debug.log`
+- I log si trovano in `sidplayer_debug.log`, nella stessa cartella di `sidplayer.cfg` (vedi [Configurazione](#configurazione))
 </details>
 
 <details>
@@ -454,6 +454,11 @@ come fallback.
 
 <details>
 <summary><strong>Log di debug</strong></summary>
+
+Il file `sidplayer_debug.log` si trova sempre nella stessa cartella di `sidplayer.cfg`
+(vedi [Configurazione](#configurazione)) — **mai** accanto all'eseguibile: su un
+`.exe`/`.app` compilato, la cartella dello script è quella di estrazione temporanea di
+PyInstaller, diversa a ogni avvio e non quella dove si trova l'applicazione.
 
 ```bash
 tail -f sidplayer_debug.log
