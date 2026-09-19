@@ -1850,6 +1850,19 @@ class SidTkPlayer:
             self._transport_legend_size -= 1
         TransportButton._W = _col_w
         _bar_plate_w = max(380, 6 * (TransportButton._W + 16) + 20)
+        # Bordo sinistro fisso invece che centratura simmetrica: con
+        # relx=0.5, ogni pixel guadagnato per stare più larghi andava per
+        # metà verso sinistra — dove c'è solo plastica beige vuota, nessuno
+        # lo contende — e per metà verso destra, verso il counter. Risultato
+        # (verificato su Windows): anche esaurendo entrambe le altre leve
+        # (spaziatura e font al minimo) restavano 7px di sovrapposizione,
+        # perché metà della crescita reale andava sprecata. Con il bordo
+        # sinistro fisso (110px, la posizione del bordo sinistro alla
+        # larghezza minima storica di 380px centrata in 600px — l'aspetto
+        # di partenza non cambia) TUTTA la crescita va verso destra, dove
+        # serve davvero. btn_group sotto usa lo stesso bordo sinistro,
+        # altrimenti le due righe non sarebbero più allineate in colonna.
+        _left_margin = 110
 
         # Riga superiore: la "targhetta" nero+grigio non copre tutta la
         # larghezza come il resto (come nella foto del Datasette originale,
@@ -1862,11 +1875,7 @@ class SidTkPlayer:
         top_row.pack_propagate(False)
 
         bar_plate = tk.Frame(top_row, width=_bar_plate_w, height=79, bg=DATASETTE["PLASTIC"])
-        # place() invece di pack(): il counter, impacchettato a destra nella
-        # stessa riga, ridurrebbe la cavità disponibile e sposterebbe il
-        # centro del pack — place() si centra sulla larghezza intera di
-        # top_row, la stessa usata dal gruppo tasti sotto, restando allineati
-        bar_plate.place(relx=0.5, y=0, anchor="n")
+        bar_plate.place(x=_left_margin, y=0, anchor="nw")
         bar_plate.pack_propagate(False)
 
         # Badge Commodore (nero). Contenuto ancorato in basso (anchor="s"):
@@ -1947,12 +1956,13 @@ class SidTkPlayer:
         btn_row = tk.Frame(transport_outer, bg=DATASETTE["PLASTIC"])
         btn_row.pack(fill=tk.X, side=tk.TOP, expand=True)
 
-        # Gruppo centrato (expand=True senza fill → si centra nello spazio
-        # residuo, sia in orizzontale che in verticale, invece di restare
-        # ancorato a sinistra). Stessa larghezza/spaziatura colonna della
-        # riga legenda sopra, per restare allineati.
+        # Stesso bordo sinistro fisso di bar_plate sopra (place, non pack
+        # centrato): le colonne devono allinearsi in verticale con le
+        # etichette, e questo richiede lo stesso punto di partenza a
+        # sinistra su entrambe le righe, non due centrature indipendenti
+        # che smettono di coincidere appena le larghezze differiscono.
         btn_group = tk.Frame(btn_row, bg=DATASETTE["PLASTIC"])
-        btn_group.pack(expand=True)
+        btn_group.place(x=_left_margin, rely=0.5, anchor="w")
 
         # Ordine come sulla scocca originale: RECORD PLAY REWIND FFWD STOP EJECT.
         # RECORD salva su disco la playlist attualmente caricata (issue #36);
