@@ -169,6 +169,21 @@ def get_available_font(preferred_font, fallback_font):
         return fallback_font
 
 
+def _fit_font_size(widget, text, family, start_size, max_width, weight="normal", floor=7):
+    """Riduce la dimensione del font finché il testo (la riga più lunga, se
+    multi-linea) non entra in max_width px — misurata sul font davvero
+    installato, non su una dimensione fissa tarata a occhio su un'altra
+    piattaforma. Preferito a un testo troncato o a un widget che trabocca."""
+    lines = text.split("\n")
+    size = start_size
+    while size > floor:
+        f = tkfont.Font(root=widget, family=family, size=size, weight=weight)
+        if max(f.measure(line) for line in lines) <= max_width:
+            break
+        size -= 1
+    return size
+
+
 def _app_icon_path(filename):
     """Risolve il path di un'icona sia in esecuzione da sorgente (assets/)
     sia da bundle PyInstaller (dove viene copiata nella root, vedi .spec)."""
@@ -1366,7 +1381,7 @@ class TransportButton:
     """
     _W, _H = 46, 62
 
-    def __init__(self, legend_row, button_row, text, command, font_family):
+    def __init__(self, legend_row, button_row, text, command, font_family, font_size=8):
         self.command = command  # None per i tasti decorativi (es. RECORD/EJECT)
         self._state = tk.NORMAL
 
@@ -1381,7 +1396,7 @@ class TransportButton:
         label_holder.pack(side=tk.LEFT, padx=8, pady=(3, 2))
         label_holder.pack_propagate(False)
 
-        self.label = tk.Label(label_holder, font=(font_family, 8, "bold"),
+        self.label = tk.Label(label_holder, font=(font_family, font_size, "bold"),
                                justify="center", pady=0,
                                fg=DATASETTE["TEXT"], bg=TRANSPORT["LEGEND_BG"])
         self.label.pack(expand=True)
@@ -1447,24 +1462,7 @@ class SidTkPlayer:
 
         # Imposta la finestra
         self.master.title("SIDPLAYER C64")
-        # Su macOS l'icona arriva già dal bundle .app (Info.plist); su
-        # Windows/Linux tk non la imposta da solo — di default mostra la
-        # piuma/feather generica di Tk in barra del titolo e nella taskbar.
-        if IS_WINDOWS:
-            ico_path = _app_icon_path("commodore.ico")
-            if ico_path:
-                try:
-                    self.master.iconbitmap(ico_path)
-                except tk.TclError:
-                    pass
-        elif IS_LINUX:
-            png_path = _app_icon_path("commodore.png")
-            if png_path:
-                try:
-                    self._icon_photo = tk.PhotoImage(file=png_path)  # riferimento vivo, serve a Tk
-                    self.master.iconphoto(True, self._icon_photo)
-                except tk.TclError:
-                    pass
+        self._apply_window_icon(self.master)
         self.master.configure(bg=DATASETTE["PLASTIC"])
         self.master.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.master.resizable(self.config.window_resizable, self.config.window_resizable)
@@ -1803,14 +1801,26 @@ class SidTkPlayer:
 
         # Larghezza colonna tasto/etichetta calcolata sul font davvero
         # installato, non indovinata in pixel fissi: C64 Pro Mono ha glifi
-        # molto più larghi del fallback Courier usato in fase di test, e la
-        # stessa larghezza "giusta" su macOS può risultare troppo stretta su
-        # Windows. Include anche "PAUSE"/"RESUME", testi dinamici del tasto
-        # PLAY. Non riduce mai sotto il minimo _W di default.
+        # molto più larghi del fallback Courier usato nei primi test. Se a
+        # 8pt le 6 colonne non entrano nello spazio disponibile (successo su
+        # Windows, dove il font misura più largo che su macOS), si riduce la
+        # dimensione invece di far traboccare la riga oltre il bordo della
+        # finestra — la finestra ha dimensione fissa, allargarla sballerebbe
+        # tutto il resto del layout. Include "PAUSE"/"RESUME", testi dinamici
+        # del tasto PLAY. _MAX_ROW_W lascia margine ai bordi della riga
+        # etichette e non supera mai i 600px di transport_outer.
         _legend_words = ["RECORD", "PLAY", "PAUSE", "RESUME", "REWIND", "FFWD", "STOP", "EJECT"]
-        _legend_font = tkfont.Font(root=self.master, family=self.font_family, size=8, weight="bold")
-        _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
-        TransportButton._W = max(TransportButton._W, _needed_w)
+        _MAX_ROW_W = 590
+        self._transport_legend_size = 8
+        while True:
+            _legend_font = tkfont.Font(root=self.master, family=self.font_family,
+                                       size=self._transport_legend_size, weight="bold")
+            _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
+            _col_w = max(46, _needed_w)
+            if 6 * (_col_w + 16) <= _MAX_ROW_W or self._transport_legend_size <= 6:
+                break
+            self._transport_legend_size -= 1
+        TransportButton._W = _col_w
         # La "targhetta" (bar_plate) deve contenere le 6 colonne alla nuova
         # larghezza — 380px era tarato sulla larghezza minima di default,
         # qui si allarga di conseguenza (con un margine di sicurezza), senza
@@ -1935,7 +1945,8 @@ class SidTkPlayer:
         ]
 
         for symbol, label, cmd, slot_idx in transport_specs:
-            btn = TransportButton(legend_group, btn_group, f"{symbol}\n{label}", cmd, self.font_family)
+            btn = TransportButton(legend_group, btn_group, f"{symbol}\n{label}", cmd,
+                                  self.font_family, font_size=self._transport_legend_size)
             self.buttons[slot_idx] = btn
 
         # RECORD disabilitato finché non ci sono tracce caricate (stesso
@@ -2029,6 +2040,7 @@ class SidTkPlayer:
                                  anchor="w", justify="left")
         self.label_title.place(x=0, y=0, width=364)
         self.label_stil.place_forget()
+        self.label_stil.config(font=(self.font_family, 9))
         self.label_stil.place(x=0, y=48, width=364)
         self.label_released.place_forget()
         self.label_released.config(font=(self.font_family, 9))
@@ -2051,17 +2063,29 @@ class SidTkPlayer:
         label (winfo_reqheight, dopo update_idletasks) invece di un calcolo
         a mano sull'interlinea del font, che ignorerebbe il padding interno
         che Tkinter aggiunge di suo — altrimenti le righe si sovrappongono.
+
+        Ogni label ha un wraplength=360 fisso (dalla creazione): se il testo
+        reale non entra, va a capo, e la riga in più cambia l'altezza reale
+        rispetto a quella letta con winfo_reqheight() PRIMA che l'a-capo si
+        sia effettivamente applicato (un solo update_idletasks() a volte non
+        basta) — le righe sotto finiscono per sovrapporsi. Riscontrato su
+        Windows con C64 Pro Mono, molto più largo del Courier di fallback
+        usato nei primi test. Si evita riducendo la dimensione finché il
+        testo entra in 360px, invece di lasciarlo andare a capo.
         """
         green = C64_PALETTE["LIGHT_GREEN"]
-        boot_font = (self.font_family, 9)
 
-        # Blocco centrato: titolo, riga vuota, RAM
+        # Blocco centrato: titolo, riga vuota, RAM. La riga RAM è la più
+        # lunga (38 caratteri) ed è quella più a rischio di dover andare a
+        # capo su font larghi.
         centered_text = (
             "**** COMMODORE 64 BASIC V2 ****\n"
             "\n"
             "64K RAM SYSTEM  38911 BASIC BYTES FREE\n"
             "\n"
         )
+        _title_size = _fit_font_size(self.master, centered_text, self.font_family, 9, 360)
+        boot_font = (self.font_family, _title_size)
         self.label_title.place_forget()
         self.label_title.config(text=centered_text, fg=green, font=boot_font,
                                  anchor="n", justify="center")
@@ -2071,7 +2095,7 @@ class SidTkPlayer:
 
         # READY., allineato a sinistra, subito sotto il blocco centrato
         self.label_stil.place_forget()
-        self.label_stil.config(text="READY.", fg=green)
+        self.label_stil.config(text="READY.", fg=green, font=boot_font)
         self.label_stil.place(x=0, y=y, width=364)
         self.label_stil.update_idletasks()
         y += self.label_stil.winfo_reqheight()
@@ -2080,9 +2104,11 @@ class SidTkPlayer:
         self.label_author.config(text="")
 
         # Hint, allineato a sinistra, subito sotto READY. (nessuno spazio)
+        _hint_text = "Click EJECT to select SID files or a playlist"
+        _hint_size = _fit_font_size(self.master, _hint_text, self.font_family, 8, 360)
         self.label_released.place_forget()
-        self.label_released.config(text="Click EJECT to select SID files or a playlist", fg=green,
-                                    font=(self.font_family, 8))
+        self.label_released.config(text=_hint_text, fg=green,
+                                    font=(self.font_family, _hint_size))
         self.label_released.place(x=0, y=y, width=364)
         self.label_released.update_idletasks()
         y += self.label_released.winfo_reqheight()
@@ -2306,6 +2332,28 @@ class SidTkPlayer:
     # UI helpers
     # ------------------------------------------------------------------
 
+    def _apply_window_icon(self, window):
+        """Su macOS l'icona arriva dal bundle .app (Info.plist), applicata
+        automaticamente a tutte le finestre. Su Windows/Linux tk non la
+        imposta da solo — senza chiamata esplicita ogni finestra (root E
+        ogni Toplevel separatamente, non la ereditano dal padre) mostra la
+        piuma/feather generica di Tk in barra del titolo/taskbar."""
+        if IS_WINDOWS:
+            ico_path = _app_icon_path("commodore.ico")
+            if ico_path:
+                try:
+                    window.iconbitmap(ico_path)
+                except tk.TclError:
+                    pass
+        elif IS_LINUX:
+            png_path = _app_icon_path("commodore.png")
+            if png_path:
+                try:
+                    window._icon_photo = tk.PhotoImage(file=png_path)  # riferimento vivo, serve a Tk
+                    window.iconphoto(True, window._icon_photo)
+                except tk.TclError:
+                    pass
+
     def blink_title(self):
         current_fg = self.label_title.cget("fg")
         self.label_title.config(fg=C64_PALETTE["YELLOW"])
@@ -2326,6 +2374,7 @@ class SidTkPlayer:
         """Mostra un menu per scegliere cosa caricare: file SID o playlist"""
         dialog = tk.Toplevel(self.master)
         dialog.title("LOAD")
+        self._apply_window_icon(dialog)
         dialog.configure(bg=C64_PALETTE["BLACK"])
         # Nessuna geometry() fissa qui: con font diversi da quello tarato
         # su macOS (es. C64 Pro Mono più largo su Windows) una dimensione
@@ -2967,12 +3016,17 @@ class SidTkPlayer:
         """Mostra la finestra About"""
         about_window = tk.Toplevel(self.master)
         about_window.title("About SIDPLAYER")
+        self._apply_window_icon(about_window)
         about_window.configure(bg=C64_PALETTE["BLACK"])
-        about_window.geometry("460x620")
         about_window.resizable(False, False)
 
+        # Dimensione ridotta invece di tagliare il testo se il font reale
+        # (C64 Pro Mono può essere molto più largo su Windows che su macOS)
+        # non entra nei 420px di contenuto disponibili nella finestra.
+        _title_size = _fit_font_size(about_window, "SIDPLAYER C64", self.font_family,
+                                     22, 420, weight="bold")
         title_label = tk.Label(about_window, text="SIDPLAYER C64",
-                              font=(self.font_family, 22, "bold"),
+                              font=(self.font_family, _title_size, "bold"),
                               fg=C64_PALETTE["LIGHT_GREEN"],
                               bg=C64_PALETTE["BLACK"])
         title_label.pack(pady=(14, 2))
@@ -3004,14 +3058,17 @@ class SidTkPlayer:
                     log_message(f"Errore caricamento ritratto: {e}")
                 break
 
-        # Crediti in stile demoscene, allineati a colonna (font monospace)
-        credits_label = tk.Label(about_window,
-                                text=("CODE ............ EZRAD & IA\n"
-                                      "MUSIC ........... HUBBARD, GALWAY, TEL,\n"
-                                      "                  DAGLISH & THE SID LEGENDS\n"
-                                      "SID CHIP ........ BOB YANNES, MOS 1982\n"
-                                      "SPECIAL THANKS .. HVSC CREW"),
-                                font=(self.font_family, 10),
+        # Crediti in stile demoscene, allineati a colonna (font monospace —
+        # l'allineamento a puntini resta corretto a qualunque dimensione,
+        # cambia solo la scala).
+        _credits_text = ("CODE ............ EZRAD & IA\n"
+                          "MUSIC ........... HUBBARD, GALWAY, TEL,\n"
+                          "                  DAGLISH & THE SID LEGENDS\n"
+                          "SID CHIP ........ BOB YANNES, MOS 1982\n"
+                          "SPECIAL THANKS .. HVSC CREW")
+        _credits_size = _fit_font_size(about_window, _credits_text, self.font_family, 10, 420)
+        credits_label = tk.Label(about_window, text=_credits_text,
+                                font=(self.font_family, _credits_size),
                                 fg=C64_PALETTE["WHITE"],
                                 bg=C64_PALETTE["BLACK"],
                                 justify="left")
@@ -3068,15 +3125,22 @@ class SidTkPlayer:
         about_window.grab_set()
         about_window.focus_set()
 
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (460 // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (580 // 2)
-        about_window.geometry(f"460x580+{x}+{y}")
+        # Rete di sicurezza: anche con i font auto-ridotti sopra, la finestra
+        # si dimensiona sul contenuto reale (come il dialog LOAD) invece di
+        # una misura fissa — non può più tagliare nulla, su nessuna piattaforma.
+        about_window.update_idletasks()
+        w = max(460, about_window.winfo_reqwidth() + 20)
+        h = about_window.winfo_reqheight() + 10
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        about_window.geometry(f"{w}x{h}+{x}+{y}")
 
     def show_help(self):
         """Mostra la finestra HELP: spiega i tasti trasporto meno ovvi
         (EJECT, PLAY, RECORD) — REWIND/FFWD/STOP sono già chiari dal nome."""
         help_window = tk.Toplevel(self.master)
         help_window.title("Help")
+        self._apply_window_icon(help_window)
         help_window.configure(bg=C64_PALETTE["BLACK"])
         help_window.resizable(False, False)
 
@@ -3146,6 +3210,7 @@ class SidTkPlayer:
         # Finestra popup
         dlg = tk.Toplevel(self.master)
         dlg.title("Audio Output")
+        self._apply_window_icon(dlg)
         dlg.configure(bg=C64_PALETTE["BLACK"])
         dlg.resizable(False, False)
         dlg.transient(self.master)
