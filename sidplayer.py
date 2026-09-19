@@ -1968,8 +1968,20 @@ class SidTkPlayer:
         # etichette, e questo richiede lo stesso punto di partenza a
         # sinistra su entrambe le righe, non due centrature indipendenti
         # che smettono di coincidere appena le larghezze differiscono.
+        #
+        # width/height ESPLICITI, non lasciati alla dimensione naturale dei
+        # figli: place() viene chiamato QUI, prima che i tasti esistano
+        # davvero (creati poco sotto) — senza una dimensione propria bar
+        # bar_plate (che infatti ha sempre avuto una width esplicita) il
+        # frame parte a dimensione ~0 e non è garantito si riadatti dopo,
+        # a differenza di pack(expand=True) che lo faceva. Riscontrato su
+        # Windows: i tasti sono spariti, ridotti a una linea sottile
+        # (screenshot "peggiorato.png"). Il riquadro può essere più
+        # generoso del necessario (stesso sfondo della plastica intorno,
+        # nessun effetto visivo) — importante solo che non sia mai 0.
         btn_group = tk.Frame(btn_row, bg=DATASETTE["PLASTIC"])
-        btn_group.place(x=_left_margin, rely=0.5, anchor="w")
+        btn_group.place(x=_left_margin, rely=0.5, anchor="w",
+                        width=600 - _left_margin - 10, height=TransportButton._H + 10)
 
         # Ordine come sulla scocca originale: RECORD PLAY REWIND FFWD STOP EJECT.
         # RECORD salva su disco la playlist attualmente caricata (issue #36);
