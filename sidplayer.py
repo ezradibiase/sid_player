@@ -1807,10 +1807,24 @@ class SidTkPlayer:
         # dimensione invece di far traboccare la riga oltre il bordo della
         # finestra — la finestra ha dimensione fissa, allargarla sballerebbe
         # tutto il resto del layout. Include "PAUSE"/"RESUME", testi dinamici
-        # del tasto PLAY. _MAX_ROW_W lascia margine ai bordi della riga
-        # etichette e non supera mai i 600px di transport_outer.
+        # del tasto PLAY.
+        #
+        # Il vincolo NON è la larghezza di transport_outer (600px): bar_plate
+        # è centrata con place(relx=0.5) sull'INTERA riga, quindi cresce in
+        # entrambe le direzioni — se supera un certo limite finisce comunque
+        # a sbattere contro il counter, impacchettato a parte sulla destra
+        # (visto succedere nei test: EJECT finiva coperto dal counter, anche
+        # se la riga restava "dentro" i 600px). Il budget va quindi calcolato
+        # sullo spazio libero *simmetrico* attorno al centro, al netto di
+        # quanto occupa davvero il counter — misurato sul font anche lui,
+        # non un numero indovinato.
+        _counter_font = tkfont.Font(root=self.master, family=self.font_family,
+                                    size=6, weight="bold")
+        _counter_w = max(56, 10 + _counter_font.measure("COUNTER")) + 10
+
         _legend_words = ["RECORD", "PLAY", "PAUSE", "RESUME", "REWIND", "FFWD", "STOP", "EJECT"]
-        _MAX_ROW_W = 590
+        _bar_plate_cap = max(380, 2 * (600 / 2 - _counter_w))
+        _MAX_ROW_W = _bar_plate_cap - 20
         self._transport_legend_size = 8
         while True:
             _legend_font = tkfont.Font(root=self.master, family=self.font_family,
@@ -1824,8 +1838,8 @@ class SidTkPlayer:
         # La "targhetta" (bar_plate) deve contenere le 6 colonne alla nuova
         # larghezza — 380px era tarato sulla larghezza minima di default,
         # qui si allarga di conseguenza (con un margine di sicurezza), senza
-        # mai superare i 600px di transport_outer.
-        _bar_plate_w = min(600, max(380, 6 * (TransportButton._W + 16) + 20))
+        # mai invadere lo spazio del counter calcolato sopra.
+        _bar_plate_w = min(_bar_plate_cap, max(380, 6 * (TransportButton._W + 16) + 20))
 
         # Riga superiore: la "targhetta" nero+grigio non copre tutta la
         # larghezza come il resto (come nella foto del Datasette originale,
