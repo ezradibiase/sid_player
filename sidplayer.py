@@ -3230,11 +3230,6 @@ class SidTkPlayer:
         dlg.transient(self.master)
         dlg.grab_set()
 
-        w, h = 420, 320
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
-        dlg.geometry(f"{w}x{h}+{x}+{y}")
-
         tk.Label(dlg, text="AUDIO OUTPUT", font=(self.font_family, 14, "bold"),
                  fg=C64_PALETTE["YELLOW"], bg=C64_PALETTE["BLACK"]).pack(pady=(12, 4))
 
@@ -3294,6 +3289,20 @@ class SidTkPlayer:
                   fg=C64_PALETTE["BLACK"], bg=C64_PALETTE["LIGHT_BLUE"],
                   activebackground=C64_PALETTE["CYAN"], relief="raised", bd=3,
                   padx=20, pady=4).pack(side="left", padx=6)
+
+        # Dimensione sul contenuto reale (nomi device inclusi) invece di una
+        # misura fissa — i nomi dei driver audio Windows sono spesso lunghi
+        # ("Altoparlanti (High Definition Audio)", percorsi di driver...) e
+        # con font più larghi (C64 Pro Mono su Windows) finivano tagliati
+        # nella listbox. Altezza minima 320 per non schiacciare la lista
+        # con poche voci; larghezza cappata per non diventare abnorme con
+        # un singolo nome device fuori scala.
+        dlg.update_idletasks()
+        w = min(760, max(420, dlg.winfo_reqwidth() + 24))
+        h = max(320, dlg.winfo_reqheight() + 10)
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        dlg.geometry(f"{w}x{h}+{x}+{y}")
 
     # ------------------------------------------------------------------
 
