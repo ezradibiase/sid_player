@@ -77,6 +77,23 @@ def _np_clear() -> None:
 # Garantisce la pulizia anche in caso di uscita anomala (crash, SIGTERM, Cmd+Q)
 atexit.register(_np_clear)
 
+def _app_data_dir():
+    """Cartella dati persistente per piattaforma (config, log) — MAI la
+    cartella dello script: in un eseguibile PyInstaller onefile, __file__
+    punta alla cartella temporanea di estrazione (nuova ad ogni avvio,
+    ripulita alla chiusura), quindi un file scritto lì non è mai quello che
+    l'utente trova accanto all'.exe/.app. Riscontrato su test reale: il log
+    "spariva", perché in realtà finiva in %TEMP%\\_MEIxxxxx, mai visto."""
+    if IS_MACOS:
+        d = os.path.expanduser("~/Library/Application Support/SIDPlayer")
+    elif IS_WINDOWS:
+        d = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'SIDPlayer')
+    else:
+        d = os.path.expanduser("~/.config/SIDPlayer")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 # Configura logging su file
 LOG_FILE = "sidplayer_debug.log"
 DEBUG_MODE = False  # Viene impostato da main() se -d è presente
@@ -84,8 +101,7 @@ DEBUG_MODE = False  # Viene impostato da main() se -d è presente
 def log_message(msg):
     """Scrive un messaggio nel file di log (sempre attivo)"""
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        log_path = os.path.join(script_dir, LOG_FILE)
+        log_path = os.path.join(_app_data_dir(), LOG_FILE)
         with open(log_path, "a", encoding="utf-8") as f:
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -242,15 +258,7 @@ class Config:
 
         if not os.path.isabs(self.config_file):
             # Posizione canonica per piattaforma — unica, nessun fallback
-            if IS_MACOS:
-                config_dir = os.path.expanduser("~/Library/Application Support/SIDPlayer")
-            elif IS_WINDOWS:
-                config_dir = os.path.join(
-                    os.environ.get('APPDATA', os.path.expanduser('~')), 'SIDPlayer')
-            else:  # Linux e altri Unix
-                config_dir = os.path.expanduser("~/.config/SIDPlayer")
-            os.makedirs(config_dir, exist_ok=True)
-            self.config_file = os.path.join(config_dir, self.config_file)
+            self.config_file = os.path.join(_app_data_dir(), self.config_file)
             log_message(f"Config: {self.config_file}")
 
         self._load_config()
