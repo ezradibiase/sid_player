@@ -3377,21 +3377,16 @@ def main():
     log_message(f"Config: {config.config_file}")
     config.ensure_directories()
 
-    if IS_WINDOWS:
-        # Senza dichiararsi DPI-aware, Windows virtualizza/ridimensiona
-        # l'intera finestra a livello di sistema (bitmap stretch) invece di
-        # lasciare che Tk calcoli font e geometria sulla risoluzione reale:
-        # a scaling frazionario (125%/150%) il testo può risultare troppo
-        # grande rispetto ai contenitori a larghezza fissa dell'interfaccia,
-        # tarati su macOS. Va chiamato prima di creare la finestra Tk.
-        try:
-            import ctypes
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)  # PROCESS_SYSTEM_DPI_AWARE
-        except Exception:
-            try:
-                ctypes.windll.user32.SetProcessDPIAware()  # fallback Windows più vecchi
-            except Exception:
-                pass
+    # NON dichiararsi DPI-aware su Windows (scelta deliberata, non
+    # dimenticanza): questa interfaccia è fatta di dimensioni fisse in
+    # pixel, tarate a mano elemento per elemento — non è responsive alla
+    # DPI. Con la dichiarazione DPI-aware, a scaling frazionario (125%/150%)
+    # Tk scala l'INTERO rendering (font *e* coordinate Canvas, es. la
+    # freccia di "AUTO STOP" disegnata in pixel fissi) mentre l'interfaccia
+    # resta a dimensione fissa in pixel: tutto appare sproporzionatamente
+    # grande. Senza, Windows ridimensiona l'intera finestra come bitmap
+    # (un filo meno nitido su schermi ad alta densità) ma mantiene tutte le
+    # proporzioni identiche a quelle tarate. Riscontrato su test reale.
 
     root = tk.Tk()
     app = SidTkPlayer(root, config=config)
