@@ -1988,11 +1988,17 @@ class SidTkPlayer:
         # mostrato che sotto una certa soglia (5-6pt) il rendering di C64 Pro
         # Mono su Windows smette di rimpicciolirsi (probabile limite del
         # font stesso), quindi ridurlo oltre non serve più a niente.
+        #
+        # _MIN_GAP: non basta "non si tocca più" — fermarsi lì lascia il
+        # counter incollato al bordo della targhetta invece che separato
+        # sulla plastica beige come nella foto originale di riferimento
+        # (confermato: senza margine esplicito il gap reale è di 1-2px).
         self.master.update_idletasks()
         _shrink_attempts = 12
         _legend_padx = 8
+        _MIN_GAP = 20
         while _shrink_attempts > 0:
-            _overlap = (legend_row.winfo_rootx() + legend_row.winfo_width()
+            _overlap = (legend_row.winfo_rootx() + legend_row.winfo_width() + _MIN_GAP
                         > counter_frame.winfo_rootx())
             if not _overlap:
                 break
