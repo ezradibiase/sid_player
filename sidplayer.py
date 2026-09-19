@@ -1856,13 +1856,20 @@ class SidTkPlayer:
         # lo contende — e per metà verso destra, verso il counter. Risultato
         # (verificato su Windows): anche esaurendo entrambe le altre leve
         # (spaziatura e font al minimo) restavano 7px di sovrapposizione,
-        # perché metà della crescita reale andava sprecata. Con il bordo
-        # sinistro fisso (110px, la posizione del bordo sinistro alla
-        # larghezza minima storica di 380px centrata in 600px — l'aspetto
-        # di partenza non cambia) TUTTA la crescita va verso destra, dove
-        # serve davvero. btn_group sotto usa lo stesso bordo sinistro,
+        # perché metà della crescita reale andava sprecata.
+        #
+        # Primo tentativo: 110px (la posizione che il bordo sinistro aveva
+        # storicamente a 380px di larghezza centrata in 600px). Sbagliato:
+        # per le larghezze reali (~430px, ben oltre 380) un bordo sinistro
+        # fisso a 110 lascia MENO margine a destra di quanto ne lasciasse
+        # la centratura, non di più — dà uno svantaggio di partenza che
+        # l'effetto raddoppiato della riduzione non basta a compensare
+        # (confermato: EJECT è finito coperto anche di più). Un margine
+        # sinistro piccolo (solo per non stare incollati al bordo nero di
+        # transport_outer) usa invece la larghezza guadagnata dove serve
+        # davvero, a destra. btn_group sotto usa lo stesso bordo sinistro,
         # altrimenti le due righe non sarebbero più allineate in colonna.
-        _left_margin = 110
+        _left_margin = 20
 
         # Riga superiore: la "targhetta" nero+grigio non copre tutta la
         # larghezza come il resto (come nella foto del Datasette originale,
