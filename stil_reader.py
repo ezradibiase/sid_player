@@ -73,43 +73,61 @@ class STILReader:
         # Le entry sono separate da linee vuote multiple
         current_path = None
         current_entry = {}
-        
+        # Subsong "attivo": persiste tra le righe finché non cambia esplicitamente
+        # (via prefisso inline "#2 TITLE:" o intestazione isolata "(#2)") o non
+        # inizia una nuova entry — necessario per il formato multi-subsong dove
+        # il numero sta su una riga a sé, separata dai campi che lo seguono.
+        current_subsong = 1
+
         lines = content.split('\n')
         i = 0
-        
+
         while i < len(lines):
             line = lines[i]
             stripped = line.strip()
-            
+
             # Salta linee vuote
             if not stripped:
                 i += 1
                 continue
-            
+
             # Nuova entry: linea che inizia con /
             if stripped.startswith('/'):
                 # Salva l'entry precedente se esiste
                 if current_path:
                     self._save_entry(current_path, current_entry)
-                
+
                 # Inizia nuova entry
                 current_path = stripped
                 current_entry = {}
+                current_subsong = 1
                 i += 1
                 continue
-            
+
+            # Intestazione di subsong isolata su una riga a sé, es. "(#3)" —
+            # formato usato per colonne sonore multi-brano (es. i livelli di
+            # un gioco), dove i campi NAME:/AUTHOR: seguono su righe separate
+            # invece del prefisso inline "#3 TITLE:". Senza questo, la riga
+            # non contiene ":" e veniva ignorata silenziosamente: i campi che
+            # seguivano finivano tutti bucket-ati nel subsong #1 di default,
+            # ognuno sovrascrivendo il precedente.
+            header_match = re.match(r'^\(#(\d+)\)$', stripped)
+            if header_match:
+                current_subsong = int(header_match.group(1))
+                i += 1
+                continue
+
             # Linea di campo (TITLE, COMMENT, ecc.)
             if current_path and ':' in stripped:
-                # Determina il numero di subsong (es. "#2 TITLE:" -> subsong 2)
-                subsong_num = 1  # Default: subsong 1
-                
                 match = re.match(r'^#(\d+)\s+(\w+):\s*(.*)$', stripped)
                 if match:
-                    subsong_num = int(match.group(1))
+                    current_subsong = int(match.group(1))
                     field_name = match.group(2)
                     field_value = match.group(3)
                 else:
-                    # Nessun prefisso #N, si applica al subsong 1 o è generico
+                    # Nessun prefisso #N inline: si applica al subsong
+                    # attualmente attivo (default #1, o quello impostato
+                    # dall'ultima intestazione "#N"/"(#N)" incontrata)
                     match = re.match(r'^(\w+):\s*(.*)$', stripped)
                     if match:
                         field_name = match.group(1)
@@ -117,19 +135,22 @@ class STILReader:
                     else:
                         i += 1
                         continue
-                
+
                 # Salva nel formato: {'#1': {'TITLE': '...', 'COMMENT': '...'}}
-                key = f'#{subsong_num}'
+                key = f'#{current_subsong}'
                 if key not in current_entry:
                     current_entry[key] = {}
-                
+
                 # Se il field_value continua nelle linee successive (multiline)
-                while i + 1 < len(lines) and lines[i + 1].strip() and not lines[i + 1].strip().startswith('/') and not re.match(r'^#?\d*\s*\w+:', lines[i + 1].strip()):
+                while (i + 1 < len(lines) and lines[i + 1].strip()
+                       and not lines[i + 1].strip().startswith('/')
+                       and not re.match(r'^#?\d*\s*\w+:', lines[i + 1].strip())
+                       and not re.match(r'^\(#\d+\)$', lines[i + 1].strip())):
                     i += 1
                     field_value += ' ' + lines[i].strip()
-                
+
                 current_entry[key][field_name] = field_value.strip()
-            
+
             i += 1
         
         # Salva l'ultima entry
@@ -175,35 +196,42 @@ class STILReader:
         """
         if not self.loaded:
             return None
-        
-        # Estrai solo il nome del file dal percorso completo
-        sid_filename = os.path.basename(sid_path)
-        
-        # Cerca per nome file esatto
-        normalized_search = sid_filename.lower()
-        
-        # Prova diverse strategie di ricerca
+
+        # Match preciso sul percorso relativo HVSC (es. da "/musicians/..."
+        # in poi), se il percorso locale rispecchia la struttura HVSC — molto
+        # più affidabile del solo nome file, che spesso collide tra autori
+        # diversi (es. 5 file "Commando.sid" distinti in tutto l'HVSC: un
+        # match per nome file da solo sceglierebbe il primo trovato nel file,
+        # non necessariamente quello giusto, senza nessun avviso).
+        normalized_query = self._normalize_path(sid_path).replace('\\', '/')
+        for prefix in ('/musicians/', '/demos/', '/games/'):
+            idx = normalized_query.rfind(prefix)
+            if idx != -1:
+                relative = normalized_query[idx:]
+                if relative in self.entries:
+                    return self._pick_subsong(self.entries[relative], subsong)
+                break
+
+        # Fallback: match per solo nome file — meno affidabile (rischio di
+        # ambiguità con file omonimi altrove nell'HVSC) ma meglio di niente
+        # per collezioni che non rispecchiano la struttura HVSC completa.
+        normalized_search = os.path.basename(sid_path).lower()
         for normalized_path, entry in self.entries.items():
-            # Estrai il nome file dal path STIL
-            stil_filename = os.path.basename(normalized_path)
-            
-            if stil_filename == normalized_search:
-                # Trovato! Ora cerca il subsong specifico
-                key = f'#{subsong}'
-                
-                # Prima prova il subsong specifico
-                if key in entry:
-                    return entry[key]
-                
-                # Se non c'è il subsong specifico, prova #1 come fallback
-                if '#1' in entry:
-                    return entry['#1']
-                
-                # Se non c'è nemmeno #1, prendi la prima entry disponibile
-                if entry:
-                    first_key = next(iter(entry))
-                    return entry[first_key]
-        
+            if os.path.basename(normalized_path) == normalized_search:
+                return self._pick_subsong(entry, subsong)
+
+        return None
+
+    def _pick_subsong(self, entry, subsong):
+        """Sceglie i campi del subsong richiesto da un'entry già trovata,
+        con fallback al subsong #1 o al primo disponibile."""
+        key = f'#{subsong}'
+        if key in entry:
+            return entry[key]
+        if '#1' in entry:
+            return entry['#1']
+        if entry:
+            return entry[next(iter(entry))]
         return None
     
     def get_title(self, sid_path, subsong=1, fallback_to_filename=True):
@@ -219,10 +247,17 @@ class STILReader:
             Titolo della traccia o None
         """
         info = self.get_info(sid_path, subsong)
-        
-        if info and 'TITLE' in info:
-            return info['TITLE']
-        
+
+        if info:
+            # NAME è un sinonimo di TITLE usato spesso nelle colonne sonore
+            # multi-brano (es. i singoli livelli di un gioco), dove i pezzi
+            # sono "pezzi con un nome" più che "brani con un titolo" — stessa
+            # semantica per SIDPlayer, quindi stesso trattamento.
+            if 'TITLE' in info:
+                return info['TITLE']
+            if 'NAME' in info:
+                return info['NAME']
+
         if fallback_to_filename:
             # Fallback: estrai dal nome file
             name = os.path.basename(sid_path)
