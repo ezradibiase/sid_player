@@ -981,6 +981,10 @@ class AudioEngine:
         self._thread = None
         self._process = None
         self._fifo_path = None
+        # Root HVSC per HVSC_BASE (vedi _popen_kwargs) — impostato da
+        # SidTkPlayer dopo la creazione, stesso valore già configurato
+        # dall'utente per STIL/GB64.
+        self.hvsc_root = None
 
     # ------------------------------------------------------------------
     # API pubblica
@@ -1074,9 +1078,27 @@ class AudioEngine:
         """Su Windows, sidplayfp.exe è un'app console: lanciata da una GUI
         senza console (come questa) Windows le apre comunque una finestra
         console visibile propria, che passa in primo piano. CREATE_NO_WINDOW
-        la sopprime — non esiste su macOS/Linux, da qui il getattr."""
+        la sopprime — non esiste su macOS/Linux, da qui il getattr.
+
+        Imposta anche HVSC_BASE nell'ambiente del processo figlio (vedi
+        `man sidplayfp` / sidplayfp.ini(5)): con `-os<N>` (single track
+        mode) sidplayfp termina da solo in base alla durata REALE della
+        subsong, letta dal database HVSC Songlengths — ma solo se riesce a
+        trovarlo. Senza HVSC_BASE (né un sidplayfp.ini configurato a mano,
+        che l'utente non dovrebbe dover fare) ogni subsong riceve la stessa
+        "Default Play Length" fissa invece della sua durata reale, rendendo
+        SUB (riproduzione in sequenza di tutte le subsong) inaffidabile.
+        hvsc_root è già configurato dall'utente per STIL/GB64 — stesso
+        valore, nessuna configurazione separata richiesta."""
+        kwargs = {}
         flag = getattr(subprocess, "CREATE_NO_WINDOW", None)
-        return {"creationflags": flag} if flag is not None else {}
+        if flag is not None:
+            kwargs["creationflags"] = flag
+        if self.hvsc_root:
+            env = os.environ.copy()
+            env["HVSC_BASE"] = self.hvsc_root
+            kwargs["env"] = env
+        return kwargs
 
     def _play_via_fifo(self, sid_path, subsong, sidplay_cmd, on_done_callback):
         # sidplayfp aggiunge automaticamente .wav al nome del file
@@ -1552,6 +1574,7 @@ class SidTkPlayer:
 
         # === Audio Engine ===
         self.audio_engine = AudioEngine(initial_volume=0.7)
+        self.audio_engine.hvsc_root = self.hvsc_root
 
         # Dizionario per le PhotoImage dei bottoni PIL (evita GC)
         self._btn_imgs = {}
