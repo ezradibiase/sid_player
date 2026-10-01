@@ -19,6 +19,7 @@ import tempfile
 import threading
 import tkinter as tk
 from tkinter import messagebox, filedialog
+from tkinter import font as tkfont
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 import configparser
@@ -76,6 +77,23 @@ def _np_clear() -> None:
 # Garantisce la pulizia anche in caso di uscita anomala (crash, SIGTERM, Cmd+Q)
 atexit.register(_np_clear)
 
+def _app_data_dir():
+    """Cartella dati persistente per piattaforma (config, log) — MAI la
+    cartella dello script: in un eseguibile PyInstaller onefile, __file__
+    punta alla cartella temporanea di estrazione (nuova ad ogni avvio,
+    ripulita alla chiusura), quindi un file scritto lì non è mai quello che
+    l'utente trova accanto all'.exe/.app. Riscontrato su test reale: il log
+    "spariva", perché in realtà finiva in %TEMP%\\_MEIxxxxx, mai visto."""
+    if IS_MACOS:
+        d = os.path.expanduser("~/Library/Application Support/SIDPlayer")
+    elif IS_WINDOWS:
+        d = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'SIDPlayer')
+    else:
+        d = os.path.expanduser("~/.config/SIDPlayer")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 # Configura logging su file
 LOG_FILE = "sidplayer_debug.log"
 DEBUG_MODE = False  # Viene impostato da main() se -d è presente
@@ -83,8 +101,7 @@ DEBUG_MODE = False  # Viene impostato da main() se -d è presente
 def log_message(msg):
     """Scrive un messaggio nel file di log (sempre attivo)"""
     try:
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        log_path = os.path.join(script_dir, LOG_FILE)
+        log_path = os.path.join(_app_data_dir(), LOG_FILE)
         with open(log_path, "a", encoding="utf-8") as f:
             from datetime import datetime
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -116,7 +133,15 @@ except ImportError:
 
 VERSION = "v6.4"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
-FONT_FALLBACK = "Courier"
+# "Courier" su Windows è il vecchio font bitmap di sistema (non scalabile): a
+# dimensioni diverse da quelle native viene ridimensionato in modo grezzo,
+# causando testo/allineamenti irregolari. "Courier New" è l'equivalente
+# TrueType corretto per quella piattaforma.
+FONT_FALLBACK = "Courier New" if IS_WINDOWS else "Courier"
+# Font fisso "vecchio terminale" usato deliberatamente per header/contatore/
+# barre anche quando C64 Pro Mono è disponibile — scelta estetica, non un
+# fallback.
+ACCENT_FONT = FONT_FALLBACK
 CONFIG_FILE = "sidplayer.cfg"
 
 C64_PALETTE = {
@@ -160,6 +185,44 @@ def get_available_font(preferred_font, fallback_font):
         return fallback_font
 
 
+def _fit_font_size(widget, text, family, start_size, max_width, weight="normal", floor=7):
+    """Riduce la dimensione del font finché il testo (la riga più lunga, se
+    multi-linea) non entra in max_width px — misurata sul font davvero
+    installato, non su una dimensione fissa tarata a occhio su un'altra
+    piattaforma. Preferito a un testo troncato o a un widget che trabocca."""
+    lines = text.split("\n")
+    size = start_size
+    while size > floor:
+        f = tkfont.Font(root=widget, family=family, size=size, weight=weight)
+        if max(f.measure(line) for line in lines) <= max_width:
+            break
+        size -= 1
+    return size
+
+
+def _app_icon_path(filename):
+    """Risolve il path di un'icona sia in esecuzione da sorgente (assets/)
+    sia da bundle PyInstaller (dove viene copiata nella root, vedi .spec)."""
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    for path in (os.path.join(base_dir, filename),
+                 os.path.join(base_dir, "assets", filename)):
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def _bundled_sidplayfp_path():
+    """Su Windows, se il .exe distribuito include sidplayfp.exe (scaricato
+    in CI via MSYS2, vedi scripts/SIDPlayer.spec), lo trova accanto a sé —
+    l'utente non deve installarlo separatamente. None altrove/se assente
+    (es. esecuzione da sorgente senza il bundle)."""
+    if not IS_WINDOWS:
+        return None
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    candidate = os.path.join(base_dir, "sidplayfp.exe")
+    return candidate if os.path.exists(candidate) else None
+
+
 class Config:
     """Gestisce la configurazione dell'applicazione"""
 
@@ -184,7 +247,7 @@ class Config:
         },
         'window': {
             'width': '640',
-            'height': '580',
+            'height': '600',
             'resizable': 'false',
         }
     }
@@ -195,15 +258,7 @@ class Config:
 
         if not os.path.isabs(self.config_file):
             # Posizione canonica per piattaforma — unica, nessun fallback
-            if IS_MACOS:
-                config_dir = os.path.expanduser("~/Library/Application Support/SIDPlayer")
-            elif IS_WINDOWS:
-                config_dir = os.path.join(
-                    os.environ.get('APPDATA', os.path.expanduser('~')), 'SIDPlayer')
-            else:  # Linux e altri Unix
-                config_dir = os.path.expanduser("~/.config/SIDPlayer")
-            os.makedirs(config_dir, exist_ok=True)
-            self.config_file = os.path.join(config_dir, self.config_file)
+            self.config_file = os.path.join(_app_data_dir(), self.config_file)
             log_message(f"Config: {self.config_file}")
 
         self._load_config()
@@ -303,7 +358,15 @@ class Config:
 
     @property
     def sidplay_cmd(self):
-        return self.get('player', 'sidplay_cmd')
+        configured = self.get('player', 'sidplay_cmd')
+        # Solo se l'utente non ha personalizzato il default 'sidplayfp':
+        # un valore esplicito nel cfg (es. un path assoluto voluto) vince
+        # sempre sul bundle.
+        if configured == self.DEFAULTS['player']['sidplay_cmd']:
+            bundled = _bundled_sidplayfp_path()
+            if bundled:
+                return bundled
+        return configured
 
     @property
     def shuffle(self):
@@ -319,7 +382,18 @@ class Config:
 
     @property
     def window_height(self):
-        return self.getint('window', 'height', 580)
+        # Floor, non solo default (issue #47 follow-up): un sidplayer.cfg
+        # già esistente da prima di questo fix ha "height = 580" scritto su
+        # disco — il default qui sotto non c'entra, ConfigParser legge il
+        # valore salvato alla lettera. Con transport_outer che ora richiede
+        # 170px (prima 150), una finestra bloccata al vecchio 580 taglia
+        # silenziosamente il fondo della riga dei tasti invece di un errore
+        # visibile (riscontrato su Windows, stesso bug già corretto a mano
+        # sul cfg locale macOS). Nessuna UI oggi permette di restringere la
+        # finestra sotto questo minimo (Preferenze non ancora implementate,
+        # issue #9), quindi il floor non toglie funzionalità reali.
+        MIN_HEIGHT = 600
+        return max(MIN_HEIGHT, self.getint('window', 'height', MIN_HEIGHT))
 
     @property
     def window_resizable(self):
@@ -907,6 +981,10 @@ class AudioEngine:
         self._thread = None
         self._process = None
         self._fifo_path = None
+        # Root HVSC per HVSC_BASE (vedi _popen_kwargs) — impostato da
+        # SidTkPlayer dopo la creazione, stesso valore già configurato
+        # dall'utente per STIL/GB64.
+        self.hvsc_root = None
 
     # ------------------------------------------------------------------
     # API pubblica
@@ -996,6 +1074,32 @@ class AudioEngine:
         cmd.append(sid_path)
         return cmd
 
+    def _popen_kwargs(self):
+        """Su Windows, sidplayfp.exe è un'app console: lanciata da una GUI
+        senza console (come questa) Windows le apre comunque una finestra
+        console visibile propria, che passa in primo piano. CREATE_NO_WINDOW
+        la sopprime — non esiste su macOS/Linux, da qui il getattr.
+
+        Imposta anche HVSC_BASE nell'ambiente del processo figlio (vedi
+        `man sidplayfp` / sidplayfp.ini(5)): con `-os<N>` (single track
+        mode) sidplayfp termina da solo in base alla durata REALE della
+        subsong, letta dal database HVSC Songlengths — ma solo se riesce a
+        trovarlo. Senza HVSC_BASE (né un sidplayfp.ini configurato a mano,
+        che l'utente non dovrebbe dover fare) ogni subsong riceve la stessa
+        "Default Play Length" fissa invece della sua durata reale, rendendo
+        SUB (riproduzione in sequenza di tutte le subsong) inaffidabile.
+        hvsc_root è già configurato dall'utente per STIL/GB64 — stesso
+        valore, nessuna configurazione separata richiesta."""
+        kwargs = {}
+        flag = getattr(subprocess, "CREATE_NO_WINDOW", None)
+        if flag is not None:
+            kwargs["creationflags"] = flag
+        if self.hvsc_root:
+            env = os.environ.copy()
+            env["HVSC_BASE"] = self.hvsc_root
+            kwargs["env"] = env
+        return kwargs
+
     def _play_via_fifo(self, sid_path, subsong, sidplay_cmd, on_done_callback):
         # sidplayfp aggiunge automaticamente .wav al nome del file
         fifo_base = os.path.join(tempfile.gettempdir(), f"sidplayer_{os.getpid()}")
@@ -1019,6 +1123,7 @@ class AudioEngine:
                 self._build_cmd(sidplay_cmd, subsong, f"-w{fifo_base}", sid_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                **self._popen_kwargs(),
             )
         except FileNotFoundError:
             self._cleanup_fifo()
@@ -1109,6 +1214,7 @@ class AudioEngine:
             self._build_cmd(sidplay_cmd, subsong, None, sid_path),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            **self._popen_kwargs(),
         )
 
         def _monitor():
@@ -1141,6 +1247,7 @@ class AudioEngine:
                 self._build_cmd(sidplay_cmd, subsong, f"-w{tmp_base}", sid_path),
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                **self._popen_kwargs(),
             )
         except FileNotFoundError:
             self._fifo_path = None
@@ -1226,7 +1333,7 @@ class TapeCounter:
     _PAD     = 4
     _FG      = "#b0afb4"
     _BG      = "#000000"
-    _FONT    = ("Courier", 13, "bold")
+    _FONT    = (ACCENT_FONT, 13, "bold")
     _ANIM_STEPS = 8
     _ANIM_MS    = 100   # ms per frame → 800 ms animazione totale
     _TICK_MS    = 2000  # ms per tick (~π×3cm / 4.76cm/s ≈ 1.98s)
@@ -1313,9 +1420,12 @@ class TransportButton:
     stessa firma di tk.Button per restare compatibile con le chiamate
     esistenti (self.buttons[N].config(...)) senza toccare il resto del codice.
     """
-    _W, _H = 46, 62
+    # _H 62→72 (issue #47): i tasti erano più "lunghi" (più alti, non più
+    # larghi) nella versione precedente del redesign. Richiede più spazio
+    # verticale in btn_row, vedi _W/_H e finestra/transport_outer sotto.
+    _W, _H = 46, 72
 
-    def __init__(self, legend_row, button_row, text, command, font_family):
+    def __init__(self, legend_row, button_row, text, command, font_family, font_size=8):
         self.command = command  # None per i tasti decorativi (es. RECORD/EJECT)
         self._state = tk.NORMAL
 
@@ -1325,21 +1435,23 @@ class TransportButton:
         # Altezza esplicita: senza, pack_propagate(False) blocca il frame
         # alla dimensione minima di default (quasi 0px) invece di adattarsi
         # al testo — l'etichetta risultava invisibile, non solo piccola.
-        label_holder = tk.Frame(legend_row, width=self._W, height=26,
-                                bg=TRANSPORT["LEGEND_BG"])
-        label_holder.pack(side=tk.LEFT, padx=8, pady=(3, 2))
-        label_holder.pack_propagate(False)
+        self._font_family = font_family
+        self._label_holder = tk.Frame(legend_row, width=self._W, height=26,
+                                      bg=TRANSPORT["LEGEND_BG"])
+        self._label_holder.pack(side=tk.LEFT, padx=8, pady=(3, 2))
+        self._label_holder.pack_propagate(False)
 
-        self.label = tk.Label(label_holder, font=(font_family, 8, "bold"),
+        self.label = tk.Label(self._label_holder, font=(font_family, font_size, "bold"),
                                justify="center", pady=0,
                                fg=DATASETTE["TEXT"], bg=TRANSPORT["LEGEND_BG"])
         self.label.pack(expand=True)
         self._set_label_text(text)
 
-        holder = tk.Frame(button_row, width=self._W, height=self._H,
-                          bg=DATASETTE["PLASTIC"])
-        holder.pack(side=tk.LEFT, padx=8, pady=4)
-        holder.pack_propagate(False)
+        self._holder = tk.Frame(button_row, width=self._W, height=self._H,
+                                bg=DATASETTE["PLASTIC"])
+        self._holder.pack(side=tk.LEFT, padx=8, pady=4)
+        self._holder.pack_propagate(False)
+        holder = self._holder
 
         self.btn = tk.Label(holder, bg=TRANSPORT["BTN"], relief="raised", bd=2)
         self.btn.pack(fill=tk.BOTH, expand=True)
@@ -1353,6 +1465,24 @@ class TransportButton:
         parts = text.split("\n", 1)
         symbol, word = (parts[0], parts[1]) if len(parts) == 2 else ("", parts[0])
         self.label.config(text=f"{word}\n{symbol}")
+
+    def resize(self, width, font_size, padx=None):
+        """Ridimensiona colonna (etichetta+tasto), font della legenda e
+        spaziatura orizzontale dopo la costruzione — usato quando una
+        verifica sulla posizione reale dei widget (non una stima) rileva
+        che la targhetta invade lo spazio del counter accanto, e serve
+        stringere ulteriormente. padx=None lascia la spaziatura invariata
+        (test reale: sotto una certa dimensione il font C64 Pro Mono su
+        Windows smette di rimpicciolirsi — probabile limite di rendering
+        del font stesso — quindi ridurre solo la dimensione non basta
+        sempre; la spaziatura tra colonne è l'altra leva, indipendente dal
+        font, sempre efficace)."""
+        self._label_holder.config(width=width)
+        self._holder.config(width=width)
+        self.label.config(font=(self._font_family, font_size, "bold"))
+        if padx is not None:
+            self._label_holder.pack_configure(padx=padx)
+            self._holder.pack_configure(padx=padx)
 
     def _on_press(self, _event):
         if self._state == tk.NORMAL:
@@ -1392,10 +1522,16 @@ class SidTkPlayer:
         self.gb64_photos_path = self.config.gb64_photos_path
         self.sidplay_cmd = self.config.sidplay_cmd
         self.shuffle = self.config.shuffle
+        # Riproduzione in sequenza di tutte le subsong (tasto SUB): sempre
+        # disattiva all'avvio, come lo shuffle non persiste il toggle a
+        # runtime — non deve interferire silenziosamente con playlist
+        # preparate apposta.
+        self.play_all_subsongs = False
         self.font_family = self.config.font_family
 
         # Imposta la finestra
         self.master.title("SIDPLAYER C64")
+        self._apply_window_icon(self.master)
         self.master.configure(bg=DATASETTE["PLASTIC"])
         self.master.geometry(f"{self.config.window_width}x{self.config.window_height}")
         self.master.resizable(self.config.window_resizable, self.config.window_resizable)
@@ -1438,6 +1574,7 @@ class SidTkPlayer:
 
         # === Audio Engine ===
         self.audio_engine = AudioEngine(initial_volume=0.7)
+        self.audio_engine.hvsc_root = self.hvsc_root
 
         # Dizionario per le PhotoImage dei bottoni PIL (evita GC)
         self._btn_imgs = {}
@@ -1484,7 +1621,7 @@ class SidTkPlayer:
         # verso sinistra, quindi si impacchetta in ordine inverso a quello
         # visivo voluto ("64" per primo, "commodore" per ultimo) — anchor="s"
         # per l'allineamento in basso nei 32px di altezza dell'header.
-        tk.Label(header_frame, text="64", font=("Courier", 18, "bold"),
+        tk.Label(header_frame, text="64", font=(ACCENT_FONT, 18, "bold"),
                  fg=_header_text, bg=_header_bg).pack(side=tk.RIGHT, padx=(8, 10), pady=2, anchor="s")
 
         _stripes_canvas = tk.Canvas(header_frame, width=90, height=22,
@@ -1496,7 +1633,7 @@ class SidTkPlayer:
             _stripes_canvas.create_rectangle(0, _y0, 90, _y0 + _stripe_h,
                                              fill=_color, outline="")
 
-        tk.Label(header_frame, text="commodore", font=("Courier", 18, "bold"),
+        tk.Label(header_frame, text="commodore", font=(ACCENT_FONT, 18, "bold"),
                  fg=_header_text, bg=_header_bg).pack(side=tk.RIGHT, padx=(20, 8), pady=2, anchor="s")
 
         # ---------------------------------------------------------------
@@ -1676,14 +1813,30 @@ class SidTkPlayer:
         btn_about.pack(side=tk.LEFT, padx=(0, 8))
         self.buttons[2] = btn_about
 
+        # SHUF e SUB: stesso stile, testo fisso (niente più "SHUF: ON/OFF" —
+        # più corto, lascia spazio al tasto SUB accanto), colore che
+        # distingue attivo/non attivo invece del testo.
         self.btn_shuffle = tk.Label(
-            util_frame, text="", width=9, anchor="center",
+            util_frame, text="SHUF", width=5, anchor="center",
             font=(self.font_family, 10, "bold"),
             bg=DATASETTE["PLASTIC"], relief="raised", bd=3, padx=6, pady=2,
         )
-        self.btn_shuffle.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_shuffle.pack(side=tk.LEFT, padx=(0, 4))
         self.btn_shuffle.bind("<Button-1>", lambda e: self._toggle_shuffle())
         self._update_shuffle_button()
+
+        # SUB: riproduce in sequenza tutte le subsong del file corrente
+        # invece di passare al file successivo della playlist non appena
+        # la prima subsong finisce — disattivo di default (non deve
+        # interferire con chi si è preparato una playlist di brani precisi).
+        self.btn_subsong_seq = tk.Label(
+            util_frame, text="SUB", width=5, anchor="center",
+            font=(self.font_family, 10, "bold"),
+            bg=DATASETTE["PLASTIC"], relief="raised", bd=3, padx=6, pady=2,
+        )
+        self.btn_subsong_seq.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_subsong_seq.bind("<Button-1>", lambda e: self._toggle_subsong_sequence())
+        self._update_subsong_seq_button()
 
         # Spacer
         tk.Frame(util_frame, bg=DATASETTE["PLASTIC"]).pack(side=tk.LEFT, expand=True, fill="x")
@@ -1730,7 +1883,60 @@ class SidTkPlayer:
         transport_outer = tk.Frame(self.canvas,
                                    bg=DATASETTE["PLASTIC"],
                                    relief="ridge", bd=4)
-        transport_outer.place(x=20, y=426, width=600, height=150)
+        # height 150→170 (issue #47): top_row (badge+legenda) resta fissa a
+        # 79px, quindi i 20px in più vanno tutti a btn_row — che per via del
+        # bordo (bd=4, 4px sopra+sotto) e di top_row riceve una cavità reale
+        # misurata di 63px, non 71 come il calcolo "a occhio" (150-79)
+        # suggerirebbe. Serve spazio in più perché TransportButton._H è
+        # salito da 62 a 72 (+ pady 4+4): 170px tiene i conti giusti anche
+        # con quel margine. Richiede la finestra più alta di 20px (vedi
+        # Config.window_height), nessun altro elemento del canvas sta sotto
+        # transport_outer quindi non c'è nulla da ridisporre.
+        transport_outer.place(x=20, y=426, width=600, height=170)
+
+        # Larghezza colonna tasto/etichetta calcolata sul font davvero
+        # installato, non indovinata in pixel fissi: C64 Pro Mono ha glifi
+        # molto più larghi del fallback Courier usato nei primi test. Include
+        # "PAUSE"/"RESUME", testi dinamici del tasto PLAY.
+        #
+        # Questa è solo una stima di PARTENZA (basata sulla larghezza di
+        # transport_outer, 600px, ignorando il counter) — il posizionamento
+        # vero, incluso lo spazio occupato dal counter, si verifica e
+        # corregge DOPO aver costruito tutto (vedi sotto): calcolare a
+        # priori quanto conta il counter si è dimostrato inaffidabile.
+        _legend_words = ["RECORD", "PLAY", "PAUSE", "RESUME", "REWIND", "FFWD", "STOP", "EJECT"]
+        _MAX_ROW_W = 590
+        self._transport_legend_size = 8
+        while True:
+            _legend_font = tkfont.Font(root=self.master, family=self.font_family,
+                                       size=self._transport_legend_size, weight="bold")
+            _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
+            _col_w = max(46, _needed_w)
+            if 6 * (_col_w + 16) <= _MAX_ROW_W or self._transport_legend_size <= 6:
+                break
+            self._transport_legend_size -= 1
+        TransportButton._W = _col_w
+        _bar_plate_w = max(380, 6 * (TransportButton._W + 16) + 20)
+        # Bordo sinistro fisso invece che centratura simmetrica: con
+        # relx=0.5, ogni pixel guadagnato per stare più larghi andava per
+        # metà verso sinistra — dove c'è solo plastica beige vuota, nessuno
+        # lo contende — e per metà verso destra, verso il counter. Risultato
+        # (verificato su Windows): anche esaurendo entrambe le altre leve
+        # (spaziatura e font al minimo) restavano 7px di sovrapposizione,
+        # perché metà della crescita reale andava sprecata.
+        #
+        # Primo tentativo: 110px (la posizione che il bordo sinistro aveva
+        # storicamente a 380px di larghezza centrata in 600px). Sbagliato:
+        # per le larghezze reali (~430px, ben oltre 380) un bordo sinistro
+        # fisso a 110 lascia MENO margine a destra di quanto ne lasciasse
+        # la centratura, non di più — dà uno svantaggio di partenza che
+        # l'effetto raddoppiato della riduzione non basta a compensare
+        # (confermato: EJECT è finito coperto anche di più). Un margine
+        # sinistro piccolo (solo per non stare incollati al bordo nero di
+        # transport_outer) usa invece la larghezza guadagnata dove serve
+        # davvero, a destra. btn_group sotto usa lo stesso bordo sinistro,
+        # altrimenti le due righe non sarebbero più allineate in colonna.
+        _left_margin = 20
 
         # Riga superiore: la "targhetta" nero+grigio non copre tutta la
         # larghezza come il resto (come nella foto del Datasette originale,
@@ -1742,12 +1948,8 @@ class SidTkPlayer:
         top_row.pack(fill=tk.X, side=tk.TOP)
         top_row.pack_propagate(False)
 
-        bar_plate = tk.Frame(top_row, width=380, height=79, bg=DATASETTE["PLASTIC"])
-        # place() invece di pack(): il counter, impacchettato a destra nella
-        # stessa riga, ridurrebbe la cavità disponibile e sposterebbe il
-        # centro del pack — place() si centra sulla larghezza intera di
-        # top_row, la stessa usata dal gruppo tasti sotto, restando allineati
-        bar_plate.place(relx=0.5, y=0, anchor="n")
+        bar_plate = tk.Frame(top_row, width=_bar_plate_w, height=79, bg=DATASETTE["PLASTIC"])
+        bar_plate.place(x=_left_margin, y=0, anchor="nw")
         bar_plate.pack_propagate(False)
 
         # Badge Commodore (nero). Contenuto ancorato in basso (anchor="s"):
@@ -1780,7 +1982,7 @@ class SidTkPlayer:
         # visibili — stesso colore del testo "C= commodore" accanto.
         tk.Label(bars_panel, text="▉▊▋▌▍▎▏",
                  fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=("Courier", 34, "bold")).pack(expand=True, padx=(4, 2))
+                 font=(ACCENT_FONT, 34, "bold")).pack(expand=True, padx=(4, 2))
 
         # Striscia grigia con le etichette (parola+simbolo) — la targhetta
         # RECORD/PLAY/REWIND/... stampata sulla scocca, separata dai tasti
@@ -1793,8 +1995,14 @@ class SidTkPlayer:
         tk.Frame(legend_row, bg="#000000", width=2).pack(side=tk.LEFT, fill=tk.Y)
         tk.Frame(legend_row, bg="#000000", width=2).pack(side=tk.RIGHT, fill=tk.Y)
         tk.Frame(legend_row, bg="#000000", height=2).pack(side=tk.BOTTOM, fill=tk.X)
+        # A sinistra (side=LEFT), non centrato (expand=True come prima): i
+        # tasti sotto partono da un bordo sinistro fisso (vedi btn_group),
+        # quindi anche le etichette devono allinearsi allo stesso bordo
+        # invece di centrarsi nello spazio di bar_plate — che di solito è
+        # più largo del necessario, spostando le etichette verso destra
+        # rispetto ai tasti sotto.
         legend_group = tk.Frame(legend_row, bg=TRANSPORT["LEGEND_BG"])
-        legend_group.pack(expand=True)
+        legend_group.pack(side=tk.LEFT)
 
         # Counter, fuori dalla targhetta, sulla plastica beige a destra —
         # stessa fascia verticale (ancorato in basso), colori scuri invece
@@ -1828,12 +2036,21 @@ class SidTkPlayer:
         btn_row = tk.Frame(transport_outer, bg=DATASETTE["PLASTIC"])
         btn_row.pack(fill=tk.X, side=tk.TOP, expand=True)
 
-        # Gruppo centrato (expand=True senza fill → si centra nello spazio
-        # residuo, sia in orizzontale che in verticale, invece di restare
-        # ancorato a sinistra). Stessa larghezza/spaziatura colonna della
-        # riga legenda sopra, per restare allineati.
+        # Stesso bordo sinistro fisso di bar_plate sopra, ma con uno spacer +
+        # pack() invece di place(): un primo tentativo con place() e
+        # dimensioni esplicite indovinate (width/height fissi) ha tagliato i
+        # tasti quasi del tutto sia su Windows che su macOS — l'altezza
+        # indovinata (72px) superava quella reale disponibile in btn_row
+        # (~63px, il resto di transport_outer dopo top_row), e place() non
+        # ridimensiona per adattarsi come farebbe pack(). pack() calcola le
+        # dimensioni dai figli reali e rispetta lo spazio del genitore,
+        # niente numeri da indovinare — lo spacer vuoto prima di btn_group
+        # ottiene lo stesso effetto del bordo sinistro fisso. +2 per
+        # allinearsi esattamente a legend_group sopra, che parte 2px più a
+        # destra per via del bordo nero sinistro di legend_row.
+        tk.Frame(btn_row, width=_left_margin + 2, bg=DATASETTE["PLASTIC"]).pack(side=tk.LEFT)
         btn_group = tk.Frame(btn_row, bg=DATASETTE["PLASTIC"])
-        btn_group.pack(expand=True)
+        btn_group.pack(side=tk.LEFT)
 
         # Ordine come sulla scocca originale: RECORD PLAY REWIND FFWD STOP EJECT.
         # RECORD salva su disco la playlist attualmente caricata (issue #36);
@@ -1849,9 +2066,61 @@ class SidTkPlayer:
             ("▲",  "EJECT",  self.load_files_dialog,     8),
         ]
 
+        _transport_buttons = []
         for symbol, label, cmd, slot_idx in transport_specs:
-            btn = TransportButton(legend_group, btn_group, f"{symbol}\n{label}", cmd, self.font_family)
+            btn = TransportButton(legend_group, btn_group, f"{symbol}\n{label}", cmd,
+                                  self.font_family, font_size=self._transport_legend_size)
             self.buttons[slot_idx] = btn
+            _transport_buttons.append(btn)
+
+        # Verifica sulla posizione REALE dei widget, non su una stima a
+        # priori (già sbagliata due volte: prima ignorava del tutto il
+        # counter, poi lo stimava ma non abbastanza) — bar_plate è centrata
+        # sull'intera riga e può comunque invadere lo spazio del counter se
+        # il font reale (C64 Pro Mono su Windows) è più largo di quanto
+        # misurato.
+        #
+        # Due leve, in ordine: prima la spaziatura tra colonne (padx, 8px di
+        # default), poi la dimensione del font. La spaziatura viene prima
+        # perché è pixel puro, sempre efficace; il font no — test reale ha
+        # mostrato che sotto una certa soglia (5-6pt) il rendering di C64 Pro
+        # Mono su Windows smette di rimpicciolirsi (probabile limite del
+        # font stesso), quindi ridurlo oltre non serve più a niente.
+        #
+        # _MIN_GAP: non basta "non si tocca più" — fermarsi lì lascia il
+        # counter incollato al bordo della targhetta invece che separato
+        # sulla plastica beige come nella foto originale di riferimento
+        # (confermato: senza margine esplicito il gap reale è di 1-2px).
+        self.master.update_idletasks()
+        _shrink_attempts = 12
+        _legend_padx = 8
+        _MIN_GAP = 20
+        while _shrink_attempts > 0:
+            _overlap = (legend_row.winfo_rootx() + legend_row.winfo_width() + _MIN_GAP
+                        > counter_frame.winfo_rootx())
+            if not _overlap:
+                break
+            if _legend_padx > 3:
+                _legend_padx -= 1
+            elif self._transport_legend_size > 5:
+                self._transport_legend_size -= 1
+                _legend_font = tkfont.Font(root=self.master, family=self.font_family,
+                                           size=self._transport_legend_size, weight="bold")
+                _needed_w = max(_legend_font.measure(w) for w in _legend_words) + 14
+                TransportButton._W = max(40, _needed_w)
+            else:
+                break  # nessun'altra leva da tirare
+            bar_plate.config(width=max(380, 6 * (TransportButton._W + 2 * _legend_padx) + 20))
+            for btn in _transport_buttons:
+                btn.resize(TransportButton._W, self._transport_legend_size, padx=_legend_padx)
+            self.master.update_idletasks()
+            _shrink_attempts -= 1
+        log_message(f"Transport bar: legend_size={self._transport_legend_size} "
+                    f"padx={_legend_padx} col_w={TransportButton._W} "
+                    f"bar_plate_w={bar_plate.winfo_width()} "
+                    f"legend_right={legend_row.winfo_rootx() + legend_row.winfo_width()} "
+                    f"counter_left={counter_frame.winfo_rootx()} "
+                    f"shrink_attempts_left={_shrink_attempts}")
 
         # RECORD disabilitato finché non ci sono tracce caricate (stesso
         # criterio di PLAY); EJECT parte abilitato, come LOAD prima di lui.
@@ -1944,6 +2213,7 @@ class SidTkPlayer:
                                  anchor="w", justify="left")
         self.label_title.place(x=0, y=0, width=364)
         self.label_stil.place_forget()
+        self.label_stil.config(font=(self.font_family, 9))
         self.label_stil.place(x=0, y=48, width=364)
         self.label_released.place_forget()
         self.label_released.config(font=(self.font_family, 9))
@@ -1966,17 +2236,29 @@ class SidTkPlayer:
         label (winfo_reqheight, dopo update_idletasks) invece di un calcolo
         a mano sull'interlinea del font, che ignorerebbe il padding interno
         che Tkinter aggiunge di suo — altrimenti le righe si sovrappongono.
+
+        Ogni label ha un wraplength=360 fisso (dalla creazione): se il testo
+        reale non entra, va a capo, e la riga in più cambia l'altezza reale
+        rispetto a quella letta con winfo_reqheight() PRIMA che l'a-capo si
+        sia effettivamente applicato (un solo update_idletasks() a volte non
+        basta) — le righe sotto finiscono per sovrapporsi. Riscontrato su
+        Windows con C64 Pro Mono, molto più largo del Courier di fallback
+        usato nei primi test. Si evita riducendo la dimensione finché il
+        testo entra in 360px, invece di lasciarlo andare a capo.
         """
         green = C64_PALETTE["LIGHT_GREEN"]
-        boot_font = (self.font_family, 9)
 
-        # Blocco centrato: titolo, riga vuota, RAM
+        # Blocco centrato: titolo, riga vuota, RAM. La riga RAM è la più
+        # lunga (38 caratteri) ed è quella più a rischio di dover andare a
+        # capo su font larghi.
         centered_text = (
             "**** COMMODORE 64 BASIC V2 ****\n"
             "\n"
             "64K RAM SYSTEM  38911 BASIC BYTES FREE\n"
             "\n"
         )
+        _title_size = _fit_font_size(self.master, centered_text, self.font_family, 9, 360)
+        boot_font = (self.font_family, _title_size)
         self.label_title.place_forget()
         self.label_title.config(text=centered_text, fg=green, font=boot_font,
                                  anchor="n", justify="center")
@@ -1986,7 +2268,7 @@ class SidTkPlayer:
 
         # READY., allineato a sinistra, subito sotto il blocco centrato
         self.label_stil.place_forget()
-        self.label_stil.config(text="READY.", fg=green)
+        self.label_stil.config(text="READY.", fg=green, font=boot_font)
         self.label_stil.place(x=0, y=y, width=364)
         self.label_stil.update_idletasks()
         y += self.label_stil.winfo_reqheight()
@@ -1995,9 +2277,11 @@ class SidTkPlayer:
         self.label_author.config(text="")
 
         # Hint, allineato a sinistra, subito sotto READY. (nessuno spazio)
+        _hint_text = "Click EJECT to select SID files or a playlist"
+        _hint_size = _fit_font_size(self.master, _hint_text, self.font_family, 8, 360)
         self.label_released.place_forget()
-        self.label_released.config(text="Click EJECT to select SID files or a playlist", fg=green,
-                                    font=(self.font_family, 8))
+        self.label_released.config(text=_hint_text, fg=green,
+                                    font=(self.font_family, _hint_size))
         self.label_released.place(x=0, y=y, width=364)
         self.label_released.update_idletasks()
         y += self.label_released.winfo_reqheight()
@@ -2088,17 +2372,32 @@ class SidTkPlayer:
             self.audio_engine.volume = 0.0
             self.mute_btn.config(bg=C64_PALETTE["RED"], fg=C64_PALETTE["WHITE"])
 
+    # Verde smorzato per i toggle SHUF/SUB attivi — più spento del verde
+    # "LIGHT_GREEN" usato altrove, per restare leggibile come semplice
+    # indicatore di stato invece che come testo in evidenza.
+    _TOGGLE_ON_COLOR = "#1B7D45"
+
     def _toggle_shuffle(self):
         """Attiva/disattiva lo shuffle per i prossimi caricamenti di playlist."""
         self.shuffle = not self.shuffle
         self._update_shuffle_button()
 
     def _update_shuffle_button(self):
-        """Aggiorna testo e colore del bottone SHUF in base allo stato corrente."""
-        if self.shuffle:
-            self.btn_shuffle.config(text="SHUF: ON", fg=C64_PALETTE["LIGHT_GREEN"])
-        else:
-            self.btn_shuffle.config(text="SHUF: OFF", fg=C64_PALETTE["DARK_GREY"])
+        """Aggiorna il colore del bottone SHUF in base allo stato corrente
+        (testo fisso, non più "SHUF: ON/OFF")."""
+        fg = self._TOGGLE_ON_COLOR if self.shuffle else DATASETTE["TEXT"]
+        self.btn_shuffle.config(fg=fg)
+
+    def _toggle_subsong_sequence(self):
+        """Attiva/disattiva la riproduzione in sequenza di tutte le subsong
+        del file corrente, invece di passare subito al file successivo."""
+        self.play_all_subsongs = not self.play_all_subsongs
+        self._update_subsong_seq_button()
+
+    def _update_subsong_seq_button(self):
+        """Aggiorna il colore del bottone SUB in base allo stato corrente."""
+        fg = self._TOGGLE_ON_COLOR if self.play_all_subsongs else DATASETTE["TEXT"]
+        self.btn_subsong_seq.config(fg=fg)
 
     # ------------------------------------------------------------------
     # Lettura metadata SID
@@ -2221,6 +2520,28 @@ class SidTkPlayer:
     # UI helpers
     # ------------------------------------------------------------------
 
+    def _apply_window_icon(self, window):
+        """Su macOS l'icona arriva dal bundle .app (Info.plist), applicata
+        automaticamente a tutte le finestre. Su Windows/Linux tk non la
+        imposta da solo — senza chiamata esplicita ogni finestra (root E
+        ogni Toplevel separatamente, non la ereditano dal padre) mostra la
+        piuma/feather generica di Tk in barra del titolo/taskbar."""
+        if IS_WINDOWS:
+            ico_path = _app_icon_path("commodore.ico")
+            if ico_path:
+                try:
+                    window.iconbitmap(ico_path)
+                except tk.TclError:
+                    pass
+        elif IS_LINUX:
+            png_path = _app_icon_path("commodore.png")
+            if png_path:
+                try:
+                    window._icon_photo = tk.PhotoImage(file=png_path)  # riferimento vivo, serve a Tk
+                    window.iconphoto(True, window._icon_photo)
+                except tk.TclError:
+                    pass
+
     def blink_title(self):
         current_fg = self.label_title.cget("fg")
         self.label_title.config(fg=C64_PALETTE["YELLOW"])
@@ -2241,8 +2562,12 @@ class SidTkPlayer:
         """Mostra un menu per scegliere cosa caricare: file SID o playlist"""
         dialog = tk.Toplevel(self.master)
         dialog.title("LOAD")
+        self._apply_window_icon(dialog)
         dialog.configure(bg=C64_PALETTE["BLACK"])
-        dialog.geometry("350x180")
+        # Nessuna geometry() fissa qui: con font diversi da quello tarato
+        # su macOS (es. C64 Pro Mono più largo su Windows) una dimensione
+        # fissa taglia i pulsanti — la finestra si dimensiona sul contenuto
+        # reale più sotto, dopo aver impacchettato i widget.
         dialog.resizable(False, False)
         dialog.transient(self.master)
         dialog.grab_set()
@@ -2284,10 +2609,15 @@ class SidTkPlayer:
                                 relief="raised", bd=4, padx=15, pady=5)
         btn_playlist.pack(side=tk.LEFT, padx=10)
 
+        # Dimensione calcolata sul contenuto reale (winfo_reqwidth/height,
+        # dopo update_idletasks) invece di un valore fisso — l'unico modo
+        # per non tagliare i pulsanti indipendentemente dal font/piattaforma.
         dialog.update_idletasks()
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (350 // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (180 // 2)
-        dialog.geometry(f"350x180+{x}+{y}")
+        w = dialog.winfo_reqwidth() + 20
+        h = dialog.winfo_reqheight() + 10
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        dialog.geometry(f"{w}x{h}+{x}+{y}")
 
     def _load_track_list(self, files, via, append=False):
         """Imposta la lista di tracce e aggiorna la UI di conseguenza.
@@ -2844,7 +3174,17 @@ class SidTkPlayer:
         if self.paused or self.audio_engine.is_active:
             self.master.after(500, lambda: self._poll_track_end(expected_index))
         else:
-            # sidplayfp terminato e stream audio esaurito → prossima traccia
+            # sidplayfp terminato e stream audio esaurito → prossima traccia,
+            # a meno che SUB sia attivo e il file corrente abbia altre
+            # subsong non ancora sentite: in quel caso si ripropone lo
+            # stesso file con la subsong successiva invece di passare al
+            # file successivo della playlist. Stesso trucco già usato dalle
+            # frecce subsong manuali (_change_subsong): si decrementa
+            # current_index e si richiama play_next_track(), che lo
+            # incrementa subito tornando sullo stesso file.
+            if self.play_all_subsongs and self.current_subsong < self.total_subsongs:
+                self.track_subsongs[self.current_index] = self.current_subsong + 1
+                self.current_index -= 1
             self.play_next_track()
 
     def skip_track(self):
@@ -2874,12 +3214,17 @@ class SidTkPlayer:
         """Mostra la finestra About"""
         about_window = tk.Toplevel(self.master)
         about_window.title("About SIDPLAYER")
+        self._apply_window_icon(about_window)
         about_window.configure(bg=C64_PALETTE["BLACK"])
-        about_window.geometry("460x620")
         about_window.resizable(False, False)
 
+        # Dimensione ridotta invece di tagliare il testo se il font reale
+        # (C64 Pro Mono può essere molto più largo su Windows che su macOS)
+        # non entra nei 420px di contenuto disponibili nella finestra.
+        _title_size = _fit_font_size(about_window, "SIDPLAYER C64", self.font_family,
+                                     22, 420, weight="bold")
         title_label = tk.Label(about_window, text="SIDPLAYER C64",
-                              font=(self.font_family, 22, "bold"),
+                              font=(self.font_family, _title_size, "bold"),
                               fg=C64_PALETTE["LIGHT_GREEN"],
                               bg=C64_PALETTE["BLACK"])
         title_label.pack(pady=(14, 2))
@@ -2911,14 +3256,17 @@ class SidTkPlayer:
                     log_message(f"Errore caricamento ritratto: {e}")
                 break
 
-        # Crediti in stile demoscene, allineati a colonna (font monospace)
-        credits_label = tk.Label(about_window,
-                                text=("CODE ............ EZRAD & IA\n"
-                                      "MUSIC ........... HUBBARD, GALWAY, TEL,\n"
-                                      "                  DAGLISH & THE SID LEGENDS\n"
-                                      "SID CHIP ........ BOB YANNES, MOS 1982\n"
-                                      "SPECIAL THANKS .. HVSC CREW"),
-                                font=(self.font_family, 10),
+        # Crediti in stile demoscene, allineati a colonna (font monospace —
+        # l'allineamento a puntini resta corretto a qualunque dimensione,
+        # cambia solo la scala).
+        _credits_text = ("CODE ............ EZRAD & IA\n"
+                          "MUSIC ........... HUBBARD, GALWAY, TEL,\n"
+                          "                  DAGLISH & THE SID LEGENDS\n"
+                          "SID CHIP ........ BOB YANNES, MOS 1982\n"
+                          "SPECIAL THANKS .. HVSC CREW")
+        _credits_size = _fit_font_size(about_window, _credits_text, self.font_family, 10, 420)
+        credits_label = tk.Label(about_window, text=_credits_text,
+                                font=(self.font_family, _credits_size),
                                 fg=C64_PALETTE["WHITE"],
                                 bg=C64_PALETTE["BLACK"],
                                 justify="left")
@@ -2975,15 +3323,23 @@ class SidTkPlayer:
         about_window.grab_set()
         about_window.focus_set()
 
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (460 // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (580 // 2)
-        about_window.geometry(f"460x580+{x}+{y}")
+        # Rete di sicurezza: anche con i font auto-ridotti sopra, la finestra
+        # si dimensiona sul contenuto reale (come il dialog LOAD) invece di
+        # una misura fissa — non può più tagliare nulla, su nessuna piattaforma.
+        about_window.update_idletasks()
+        w = max(460, about_window.winfo_reqwidth() + 20)
+        h = about_window.winfo_reqheight() + 10
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        about_window.geometry(f"{w}x{h}+{x}+{y}")
 
     def show_help(self):
         """Mostra la finestra HELP: spiega i tasti trasporto meno ovvi
-        (EJECT, PLAY, RECORD) — REWIND/FFWD/STOP sono già chiari dal nome."""
+        (EJECT, PLAY, RECORD) — REWIND/FFWD/STOP sono già chiari dal nome —
+        più i toggle SHUF/SUB della riga utility."""
         help_window = tk.Toplevel(self.master)
         help_window.title("Help")
+        self._apply_window_icon(help_window)
         help_window.configure(bg=C64_PALETTE["BLACK"])
         help_window.resizable(False, False)
 
@@ -2999,6 +3355,12 @@ class SidTkPlayer:
                           "as a new playlist file."),
             ("▲  EJECT", "Opens the file picker to load SID files or a "
                          "playlist."),
+            ("SHUF", "Shuffles the track order. Off by default, so a playlist "
+                     "you built on purpose always plays in order unless you "
+                     "turn it on."),
+            ("SUB", "Plays every subsong of the current file in sequence "
+                    "before moving to the next track, instead of stopping "
+                    "after the first one. Off by default."),
         ]
         for symbol, text in entries:
             tk.Label(help_window, text=symbol,
@@ -3053,15 +3415,11 @@ class SidTkPlayer:
         # Finestra popup
         dlg = tk.Toplevel(self.master)
         dlg.title("Audio Output")
+        self._apply_window_icon(dlg)
         dlg.configure(bg=C64_PALETTE["BLACK"])
         dlg.resizable(False, False)
         dlg.transient(self.master)
         dlg.grab_set()
-
-        w, h = 420, 320
-        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
-        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
-        dlg.geometry(f"{w}x{h}+{x}+{y}")
 
         tk.Label(dlg, text="AUDIO OUTPUT", font=(self.font_family, 14, "bold"),
                  fg=C64_PALETTE["YELLOW"], bg=C64_PALETTE["BLACK"]).pack(pady=(12, 4))
@@ -3122,6 +3480,20 @@ class SidTkPlayer:
                   fg=C64_PALETTE["BLACK"], bg=C64_PALETTE["LIGHT_BLUE"],
                   activebackground=C64_PALETTE["CYAN"], relief="raised", bd=3,
                   padx=20, pady=4).pack(side="left", padx=6)
+
+        # Dimensione sul contenuto reale (nomi device inclusi) invece di una
+        # misura fissa — i nomi dei driver audio Windows sono spesso lunghi
+        # ("Altoparlanti (High Definition Audio)", percorsi di driver...) e
+        # con font più larghi (C64 Pro Mono su Windows) finivano tagliati
+        # nella listbox. Altezza minima 320 per non schiacciare la lista
+        # con poche voci; larghezza cappata per non diventare abnorme con
+        # un singolo nome device fuori scala.
+        dlg.update_idletasks()
+        w = min(760, max(420, dlg.winfo_reqwidth() + 24))
+        h = max(320, dlg.winfo_reqheight() + 10)
+        x = self.master.winfo_x() + (self.master.winfo_width() // 2) - (w // 2)
+        y = self.master.winfo_y() + (self.master.winfo_height() // 2) - (h // 2)
+        dlg.geometry(f"{w}x{h}+{x}+{y}")
 
     # ------------------------------------------------------------------
 
@@ -3195,6 +3567,17 @@ def main():
     config = Config()
     log_message(f"Config: {config.config_file}")
     config.ensure_directories()
+
+    # NON dichiararsi DPI-aware su Windows (scelta deliberata, non
+    # dimenticanza): questa interfaccia è fatta di dimensioni fisse in
+    # pixel, tarate a mano elemento per elemento — non è responsive alla
+    # DPI. Con la dichiarazione DPI-aware, a scaling frazionario (125%/150%)
+    # Tk scala l'INTERO rendering (font *e* coordinate Canvas, es. la
+    # freccia di "AUTO STOP" disegnata in pixel fissi) mentre l'interfaccia
+    # resta a dimensione fissa in pixel: tutto appare sproporzionatamente
+    # grande. Senza, Windows ridimensiona l'intera finestra come bitmap
+    # (un filo meno nitido su schermi ad alta densità) ma mantiene tutte le
+    # proporzioni identiche a quelle tarate. Riscontrato su test reale.
 
     root = tk.Tk()
     app = SidTkPlayer(root, config=config)

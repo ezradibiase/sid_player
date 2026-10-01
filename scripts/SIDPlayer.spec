@@ -12,14 +12,33 @@ _datas = [
     ('../stil_reader.py', '.'),
     ('../nowplaying_mac.py', '.'),
     ('../gb64_reader.py', '.'),
+    # icona bundlata anche come dato (non solo come risorsa .exe/.app) così
+    # sidplayer.py può impostarla a runtime su Windows/Linux via _app_icon_path()
+    ('../assets/commodore.ico', '.'),
+    ('../assets/commodore.png', '.'),
 ]
 if os.path.exists('../ezrad_portrait.png'):
     _datas.append(('../ezrad_portrait.png', '.'))
 
+# sidplayfp.exe + le sue DLL runtime: preparate dal workflow CI Windows (via
+# MSYS2, build-time soltanto) in scripts/vendor/sidplayfp-windows/, così
+# l'utente finale scarica un pacchetto unico e non deve installare nulla.
+# Assente in dev locale/altre piattaforme: bundling condizionale, nessun
+# errore se la cartella non c'è.
+_binaries = []
+_sidplayfp_vendor_dir = 'vendor/sidplayfp-windows'
+if sys.platform == 'win32' and os.path.isdir(_sidplayfp_vendor_dir):
+    for _fname in os.listdir(_sidplayfp_vendor_dir):
+        _fpath = os.path.join(_sidplayfp_vendor_dir, _fname)
+        if _fname.lower().endswith('.txt'):
+            _datas.append((_fpath, '.'))
+        else:
+            _binaries.append((_fpath, '.'))
+
 a = Analysis(
     ['../sidplayer.py'],
     pathex=['..'],
-    binaries=[],
+    binaries=_binaries,
     datas=_datas,
     hiddenimports=['sounddevice', 'numpy'],
     hookspath=[],
