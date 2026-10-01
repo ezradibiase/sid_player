@@ -1486,6 +1486,11 @@ class SidTkPlayer:
         self.gb64_photos_path = self.config.gb64_photos_path
         self.sidplay_cmd = self.config.sidplay_cmd
         self.shuffle = self.config.shuffle
+        # Riproduzione in sequenza di tutte le subsong (tasto SUB): sempre
+        # disattiva all'avvio, come lo shuffle non persiste il toggle a
+        # runtime — non deve interferire silenziosamente con playlist
+        # preparate apposta.
+        self.play_all_subsongs = False
         self.font_family = self.config.font_family
 
         # Imposta la finestra
@@ -1771,14 +1776,30 @@ class SidTkPlayer:
         btn_about.pack(side=tk.LEFT, padx=(0, 8))
         self.buttons[2] = btn_about
 
+        # SHUF e SUB: stesso stile, testo fisso (niente più "SHUF: ON/OFF" —
+        # più corto, lascia spazio al tasto SUB accanto), colore che
+        # distingue attivo/non attivo invece del testo.
         self.btn_shuffle = tk.Label(
-            util_frame, text="", width=9, anchor="center",
+            util_frame, text="SHUF", width=5, anchor="center",
             font=(self.font_family, 10, "bold"),
             bg=DATASETTE["PLASTIC"], relief="raised", bd=3, padx=6, pady=2,
         )
-        self.btn_shuffle.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_shuffle.pack(side=tk.LEFT, padx=(0, 4))
         self.btn_shuffle.bind("<Button-1>", lambda e: self._toggle_shuffle())
         self._update_shuffle_button()
+
+        # SUB: riproduce in sequenza tutte le subsong del file corrente
+        # invece di passare al file successivo della playlist non appena
+        # la prima subsong finisce — disattivo di default (non deve
+        # interferire con chi si è preparato una playlist di brani precisi).
+        self.btn_subsong_seq = tk.Label(
+            util_frame, text="SUB", width=5, anchor="center",
+            font=(self.font_family, 10, "bold"),
+            bg=DATASETTE["PLASTIC"], relief="raised", bd=3, padx=6, pady=2,
+        )
+        self.btn_subsong_seq.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_subsong_seq.bind("<Button-1>", lambda e: self._toggle_subsong_sequence())
+        self._update_subsong_seq_button()
 
         # Spacer
         tk.Frame(util_frame, bg=DATASETTE["PLASTIC"]).pack(side=tk.LEFT, expand=True, fill="x")
@@ -1928,8 +1949,14 @@ class SidTkPlayer:
         tk.Frame(legend_row, bg="#000000", width=2).pack(side=tk.LEFT, fill=tk.Y)
         tk.Frame(legend_row, bg="#000000", width=2).pack(side=tk.RIGHT, fill=tk.Y)
         tk.Frame(legend_row, bg="#000000", height=2).pack(side=tk.BOTTOM, fill=tk.X)
+        # A sinistra (side=LEFT), non centrato (expand=True come prima): i
+        # tasti sotto partono da un bordo sinistro fisso (vedi btn_group),
+        # quindi anche le etichette devono allinearsi allo stesso bordo
+        # invece di centrarsi nello spazio di bar_plate — che di solito è
+        # più largo del necessario, spostando le etichette verso destra
+        # rispetto ai tasti sotto.
         legend_group = tk.Frame(legend_row, bg=TRANSPORT["LEGEND_BG"])
-        legend_group.pack(expand=True)
+        legend_group.pack(side=tk.LEFT)
 
         # Counter, fuori dalla targhetta, sulla plastica beige a destra —
         # stessa fascia verticale (ancorato in basso), colori scuri invece
@@ -1963,25 +1990,21 @@ class SidTkPlayer:
         btn_row = tk.Frame(transport_outer, bg=DATASETTE["PLASTIC"])
         btn_row.pack(fill=tk.X, side=tk.TOP, expand=True)
 
-        # Stesso bordo sinistro fisso di bar_plate sopra (place, non pack
-        # centrato): le colonne devono allinearsi in verticale con le
-        # etichette, e questo richiede lo stesso punto di partenza a
-        # sinistra su entrambe le righe, non due centrature indipendenti
-        # che smettono di coincidere appena le larghezze differiscono.
-        #
-        # width/height ESPLICITI, non lasciati alla dimensione naturale dei
-        # figli: place() viene chiamato QUI, prima che i tasti esistano
-        # davvero (creati poco sotto) — senza una dimensione propria bar
-        # bar_plate (che infatti ha sempre avuto una width esplicita) il
-        # frame parte a dimensione ~0 e non è garantito si riadatti dopo,
-        # a differenza di pack(expand=True) che lo faceva. Riscontrato su
-        # Windows: i tasti sono spariti, ridotti a una linea sottile
-        # (screenshot "peggiorato.png"). Il riquadro può essere più
-        # generoso del necessario (stesso sfondo della plastica intorno,
-        # nessun effetto visivo) — importante solo che non sia mai 0.
+        # Stesso bordo sinistro fisso di bar_plate sopra, ma con uno spacer +
+        # pack() invece di place(): un primo tentativo con place() e
+        # dimensioni esplicite indovinate (width/height fissi) ha tagliato i
+        # tasti quasi del tutto sia su Windows che su macOS — l'altezza
+        # indovinata (72px) superava quella reale disponibile in btn_row
+        # (~63px, il resto di transport_outer dopo top_row), e place() non
+        # ridimensiona per adattarsi come farebbe pack(). pack() calcola le
+        # dimensioni dai figli reali e rispetta lo spazio del genitore,
+        # niente numeri da indovinare — lo spacer vuoto prima di btn_group
+        # ottiene lo stesso effetto del bordo sinistro fisso. +2 per
+        # allinearsi esattamente a legend_group sopra, che parte 2px più a
+        # destra per via del bordo nero sinistro di legend_row.
+        tk.Frame(btn_row, width=_left_margin + 2, bg=DATASETTE["PLASTIC"]).pack(side=tk.LEFT)
         btn_group = tk.Frame(btn_row, bg=DATASETTE["PLASTIC"])
-        btn_group.place(x=_left_margin, rely=0.5, anchor="w",
-                        width=600 - _left_margin - 10, height=TransportButton._H + 10)
+        btn_group.pack(side=tk.LEFT)
 
         # Ordine come sulla scocca originale: RECORD PLAY REWIND FFWD STOP EJECT.
         # RECORD salva su disco la playlist attualmente caricata (issue #36);
@@ -2303,17 +2326,32 @@ class SidTkPlayer:
             self.audio_engine.volume = 0.0
             self.mute_btn.config(bg=C64_PALETTE["RED"], fg=C64_PALETTE["WHITE"])
 
+    # Verde smorzato per i toggle SHUF/SUB attivi — più spento del verde
+    # "LIGHT_GREEN" usato altrove, per restare leggibile come semplice
+    # indicatore di stato invece che come testo in evidenza.
+    _TOGGLE_ON_COLOR = "#1B7D45"
+
     def _toggle_shuffle(self):
         """Attiva/disattiva lo shuffle per i prossimi caricamenti di playlist."""
         self.shuffle = not self.shuffle
         self._update_shuffle_button()
 
     def _update_shuffle_button(self):
-        """Aggiorna testo e colore del bottone SHUF in base allo stato corrente."""
-        if self.shuffle:
-            self.btn_shuffle.config(text="SHUF: ON", fg=C64_PALETTE["LIGHT_GREEN"])
-        else:
-            self.btn_shuffle.config(text="SHUF: OFF", fg=C64_PALETTE["DARK_GREY"])
+        """Aggiorna il colore del bottone SHUF in base allo stato corrente
+        (testo fisso, non più "SHUF: ON/OFF")."""
+        fg = self._TOGGLE_ON_COLOR if self.shuffle else DATASETTE["TEXT"]
+        self.btn_shuffle.config(fg=fg)
+
+    def _toggle_subsong_sequence(self):
+        """Attiva/disattiva la riproduzione in sequenza di tutte le subsong
+        del file corrente, invece di passare subito al file successivo."""
+        self.play_all_subsongs = not self.play_all_subsongs
+        self._update_subsong_seq_button()
+
+    def _update_subsong_seq_button(self):
+        """Aggiorna il colore del bottone SUB in base allo stato corrente."""
+        fg = self._TOGGLE_ON_COLOR if self.play_all_subsongs else DATASETTE["TEXT"]
+        self.btn_subsong_seq.config(fg=fg)
 
     # ------------------------------------------------------------------
     # Lettura metadata SID
@@ -3090,7 +3128,17 @@ class SidTkPlayer:
         if self.paused or self.audio_engine.is_active:
             self.master.after(500, lambda: self._poll_track_end(expected_index))
         else:
-            # sidplayfp terminato e stream audio esaurito → prossima traccia
+            # sidplayfp terminato e stream audio esaurito → prossima traccia,
+            # a meno che SUB sia attivo e il file corrente abbia altre
+            # subsong non ancora sentite: in quel caso si ripropone lo
+            # stesso file con la subsong successiva invece di passare al
+            # file successivo della playlist. Stesso trucco già usato dalle
+            # frecce subsong manuali (_change_subsong): si decrementa
+            # current_index e si richiama play_next_track(), che lo
+            # incrementa subito tornando sullo stesso file.
+            if self.play_all_subsongs and self.current_subsong < self.total_subsongs:
+                self.track_subsongs[self.current_index] = self.current_subsong + 1
+                self.current_index -= 1
             self.play_next_track()
 
     def skip_track(self):
@@ -3241,7 +3289,8 @@ class SidTkPlayer:
 
     def show_help(self):
         """Mostra la finestra HELP: spiega i tasti trasporto meno ovvi
-        (EJECT, PLAY, RECORD) — REWIND/FFWD/STOP sono già chiari dal nome."""
+        (EJECT, PLAY, RECORD) — REWIND/FFWD/STOP sono già chiari dal nome —
+        più i toggle SHUF/SUB della riga utility."""
         help_window = tk.Toplevel(self.master)
         help_window.title("Help")
         self._apply_window_icon(help_window)
@@ -3260,6 +3309,12 @@ class SidTkPlayer:
                           "as a new playlist file."),
             ("▲  EJECT", "Opens the file picker to load SID files or a "
                          "playlist."),
+            ("SHUF", "Shuffles the track order. Off by default, so a playlist "
+                     "you built on purpose always plays in order unless you "
+                     "turn it on."),
+            ("SUB", "Plays every subsong of the current file in sequence "
+                    "before moving to the next track, instead of stopping "
+                    "after the first one. Off by default."),
         ]
         for symbol, text in entries:
             tk.Label(help_window, text=symbol,
