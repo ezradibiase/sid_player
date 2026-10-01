@@ -13,9 +13,9 @@ e integrazione con Touch Bar e Control Center su macOS.
 ![Python](https://img.shields.io/badge/python-3.10+-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-<img src="docs/athena.webp" alt="SIDPlayer in riproduzione: Athena di Martin Galway, con cover art, foto dell'autore, subsong selector e contatore a nastro" width="640">
+<img src="docs/fairlight.webp" alt="SIDPlayer in riproduzione: Fairlight (Enlightenment: Druid II) di Graham Jarvis e Rob Hartshorne, con cover art e tasti trasporto più alti" width="640">
 
-*In riproduzione: Martin Galway, "Athena" (1987 Imagine) — subsong 1 di 9, con cover art e foto dell'autore.*
+*In riproduzione: Graham Jarvis & Rob Hartshorne, "Enlightenment: Druid II" (1986 The Edge) — subsong 3, con cover art "Fairlight".*
 
 </div>
 
