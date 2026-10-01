@@ -516,7 +516,7 @@ il supporto è in beta proprio perché mancano test sul campo.
 | **Chip SID** | Bob Yannes, MOS Technology, 1982 |
 | **Collezione** | [HVSC — High Voltage SID Collection](https://www.hvsc.c64.org/) |
 | **Motore audio** | [sidplayfp](https://github.com/libsidplayfp/sidplayfp) |
-| **Font** | [C64 Pro Mono](https://github.com/mborgbrant/c64-pro-mono) |
+| **Font** | [C64 Pro Mono](https://github.com/mborgbrant/c64-pro-mono), [Michroma](https://fonts.google.com/specimen/Michroma) (badge trasporto) |
 
 Altri link: [IGDB API](https://api-docs.igdb.com/) · [RAWG.io API](https://rawg.io/apidocs)
 
