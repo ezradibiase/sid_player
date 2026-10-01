@@ -247,7 +247,7 @@ class Config:
         },
         'window': {
             'width': '640',
-            'height': '580',
+            'height': '600',
             'resizable': 'false',
         }
     }
@@ -382,7 +382,9 @@ class Config:
 
     @property
     def window_height(self):
-        return self.getint('window', 'height', 580)
+        # 580→600 (issue #47): transport_outer cresce di 20px per dare ai
+        # tasti trasporto più altezza (vedi TransportButton._H).
+        return self.getint('window', 'height', 600)
 
     @property
     def window_resizable(self):
@@ -1387,7 +1389,10 @@ class TransportButton:
     stessa firma di tk.Button per restare compatibile con le chiamate
     esistenti (self.buttons[N].config(...)) senza toccare il resto del codice.
     """
-    _W, _H = 46, 62
+    # _H 62→72 (issue #47): i tasti erano più "lunghi" (più alti, non più
+    # larghi) nella versione precedente del redesign. Richiede più spazio
+    # verticale in btn_row, vedi _W/_H e finestra/transport_outer sotto.
+    _W, _H = 46, 72
 
     def __init__(self, legend_row, button_row, text, command, font_family, font_size=8):
         self.command = command  # None per i tasti decorativi (es. RECORD/EJECT)
@@ -1846,7 +1851,16 @@ class SidTkPlayer:
         transport_outer = tk.Frame(self.canvas,
                                    bg=DATASETTE["PLASTIC"],
                                    relief="ridge", bd=4)
-        transport_outer.place(x=20, y=426, width=600, height=150)
+        # height 150→170 (issue #47): top_row (badge+legenda) resta fissa a
+        # 79px, quindi i 20px in più vanno tutti a btn_row — che per via del
+        # bordo (bd=4, 4px sopra+sotto) e di top_row riceve una cavità reale
+        # misurata di 63px, non 71 come il calcolo "a occhio" (150-79)
+        # suggerirebbe. Serve spazio in più perché TransportButton._H è
+        # salito da 62 a 72 (+ pady 4+4): 170px tiene i conti giusti anche
+        # con quel margine. Richiede la finestra più alta di 20px (vedi
+        # Config.window_height), nessun altro elemento del canvas sta sotto
+        # transport_outer quindi non c'è nulla da ridisporre.
+        transport_outer.place(x=20, y=426, width=600, height=170)
 
         # Larghezza colonna tasto/etichetta calcolata sul font davvero
         # installato, non indovinata in pixel fissi: C64 Pro Mono ha glifi
