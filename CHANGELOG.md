@@ -4,6 +4,40 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.5] — 2026-10-01
+
+### Aggiunto
+- **Build Windows via GitHub Actions**: `.github/workflows/build-windows.yml` compila
+  l'app per Windows e bundla `sidplayfp.exe` + DLL runtime automaticamente (via MSYS2,
+  a build-time) — nessuna installazione separata richiesta. Pubblica l'eseguibile sulla
+  GitHub Release al push di un tag `v*`.
+- **Toggle SUB**: riproduce in sequenza tutte le subsong del brano corrente prima di
+  passare al successivo della playlist, invece di fermarsi dopo la prima. Disattivo di
+  default, documentato in HELP.
+
+### Modifiche
+- **SHUF** mostra solo il testo "SHUF" (verde se attivo, invece di "ON"/"OFF") per
+  lasciare spazio al nuovo tasto SUB accanto.
+- Tasti trasporto più alti (62→72px), come nella versione precedente al redesign
+  (issue #47); finestra 580→600px per lo spazio verticale necessario.
+
+### Fix
+- **Collasso dei tasti trasporto** (ridotti a una linea sottile) su Windows e macOS:
+  causato da un `place()` con dimensioni indovinate anziché calcolate sulla cavità
+  reale del genitore.
+- **Avanzamento automatico subsong inaffidabile su Windows**: `sidplayfp` termina una
+  traccia in base alla durata reale letta dal database HVSC Songlengths, ma solo se lo
+  trova — ora l'app imposta sempre `HVSC_BASE` nell'ambiente del processo, usando lo
+  stesso `hvsc_root` già configurato per STIL/GB64.
+- **Titoli delle subsong nello STIL**: due bug nel parser (header `(#N)` standalone non
+  gestito, sinonimo `NAME`/`TITLE` non riconosciuto) e un bug di matching sul solo nome
+  file, che poteva selezionare l'entry sbagliata in caso di file HVSC omonimi.
+- Vari bug visivi solo-Windows: finestra console indesiderata, testo/finestre tagliate
+  per il font più largo di C64 Pro Mono su Windows, log di debug introvabile (ora in
+  `%APPDATA%\SIDPlayer\`/`~/Library/Application Support/SIDPlayer/`).
+
+---
+
 ## [v6.4] — 2026-07-22
 
 ### Aggiunto
