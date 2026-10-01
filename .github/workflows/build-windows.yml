@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # I filtri "paths" non si applicano ai push di tag (solo ai branch): un
+    # push di tag v* fa quindi sempre partire la build, indipendentemente
+    # dai file toccati — è il trigger della release.
+    tags: ["v*"]
     paths:
       - "sidplayer.py"
       - "stil_reader.py"
@@ -27,6 +31,8 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write  # necessario solo per creare la Release sui push di tag
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,6 +47,59 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      # sidplayfp non ha un .exe Windows scaricabile "pronto": l'unico modo
+      # pratico è il pacchetto MSYS2/mingw64. Lo installiamo solo qui in CI
+      # (build-time) e lo bundliamo dentro SIDPlayer.exe — l'utente finale
+      # scarica un solo file e non deve installare nulla.
+      - name: Install sidplayfp via MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-sidplayfp
+            mingw-w64-x86_64-ntldd
+
+      - name: Stage sidplayfp.exe + runtime DLLs for bundling
+        shell: msys2 {0}
+        run: |
+          set -e
+          DEST="$(cygpath -u "$GITHUB_WORKSPACE")/scripts/vendor/sidplayfp-windows"
+          mkdir -p "$DEST"
+          cp /mingw64/bin/sidplayfp.exe "$DEST/"
+          # Path esatto del file di licenza non verificato: se il pacchetto
+          # MSYS2 lo installa altrove questo passo semplicemente non copia
+          # nulla (il build non fallisce, ma va controllato nel primo run).
+          cp /mingw64/share/licenses/sidplayfp/COPYING "$DEST/COPYING-sidplayfp.txt" 2>/dev/null || \
+            cp /mingw64/share/doc/sidplayfp/COPYING "$DEST/COPYING-sidplayfp.txt" 2>/dev/null || \
+            echo "ATTENZIONE: file di licenza sidplayfp non trovato nei path noti"
+
+          echo "--- Output grezzo ntldd (debug, per verificare il formato path) ---"
+          ntldd -R /mingw64/bin/sidplayfp.exe || true
+
+          # Dipendenze DLL scoperte a runtime (non hardcoded) — solo quelle
+          # fornite da mingw64, le DLL di sistema Windows sono già presenti
+          # su qualsiasi macchina. cygpath normalizza il path indipendentemente
+          # dal formato stampato da ntldd (drive letter, backslash, ecc.); il
+          # controllo -f prima della copia evita di inciampare su eventuali
+          # librerie "not found" nell'output.
+          echo "--- Copia DLL di runtime ---"
+          ntldd -R /mingw64/bin/sidplayfp.exe 2>/dev/null | grep '=>' | while IFS= read -r line; do
+            dllpath=$(echo "$line" | sed -E 's/^.*=> *//; s/ *\(0x[0-9A-Fa-f]+\)[[:space:]]*$//')
+            unixpath=$(cygpath -u "$dllpath" 2>/dev/null || echo "$dllpath")
+            case "$unixpath" in
+              /c/[Ww][Ii][Nn][Dd][Oo][Ww][Ss]/*) continue ;;
+            esac
+            if [ -f "$unixpath" ]; then
+              cp "$unixpath" "$DEST/" && echo "copiato: $unixpath"
+            else
+              echo "SALTATO (non trovato su disco): $unixpath (originale: $dllpath)"
+            fi
+          done
+
+          echo "--- Contenuto bundle sidplayfp ---"
+          ls -la "$DEST"
+
       - name: Build with PyInstaller
         working-directory: scripts
         run: pyinstaller SIDPlayer.spec
@@ -51,3 +110,12 @@ jobs:
           name: SIDPlayer-windows
           path: scripts/dist/SIDPlayer.exe
           if-no-files-found: error
+
+      # Solo sui push di tag (es. v6.5): crea/aggiorna la Release GitHub e ci
+      # allega l'exe. Su workflow_dispatch/push a main/PR questo step non gira.
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: scripts/dist/SIDPlayer.exe
+          generate_release_notes: true
