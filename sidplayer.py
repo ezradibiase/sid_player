@@ -382,9 +382,18 @@ class Config:
 
     @property
     def window_height(self):
-        # 580→600 (issue #47): transport_outer cresce di 20px per dare ai
-        # tasti trasporto più altezza (vedi TransportButton._H).
-        return self.getint('window', 'height', 600)
+        # Floor, non solo default (issue #47 follow-up): un sidplayer.cfg
+        # già esistente da prima di questo fix ha "height = 580" scritto su
+        # disco — il default qui sotto non c'entra, ConfigParser legge il
+        # valore salvato alla lettera. Con transport_outer che ora richiede
+        # 170px (prima 150), una finestra bloccata al vecchio 580 taglia
+        # silenziosamente il fondo della riga dei tasti invece di un errore
+        # visibile (riscontrato su Windows, stesso bug già corretto a mano
+        # sul cfg locale macOS). Nessuna UI oggi permette di restringere la
+        # finestra sotto questo minimo (Preferenze non ancora implementate,
+        # issue #9), quindi il floor non toglie funzionalità reali.
+        MIN_HEIGHT = 600
+        return max(MIN_HEIGHT, self.getint('window', 'height', MIN_HEIGHT))
 
     @property
     def window_resizable(self):
