@@ -17,16 +17,12 @@ on:
       - "scripts/SIDPlayer.spec"
       - "assets/**"
       - ".github/workflows/build-windows.yml"
+  # Nessun filtro "paths" sulle PR: il check "build" è obbligatorio per
+  # mergiare su main (ruleset), e un workflow filtrato non parte sulle PR che
+  # toccano solo README/docs — GitHub resterebbe in attesa per sempre di un
+  # check che non arriva, lasciando la PR bloccata. Il filtro resta sui push
+  # a main, così un merge di sola documentazione non ricompila.
   pull_request:
-    paths:
-      - "sidplayer.py"
-      - "stil_reader.py"
-      - "gb64_reader.py"
-      - "nowplaying_mac.py"
-      - "requirements.txt"
-      - "scripts/SIDPlayer.spec"
-      - "assets/**"
-      - ".github/workflows/build-windows.yml"
 
 jobs:
   build:
