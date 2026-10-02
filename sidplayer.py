@@ -3239,7 +3239,7 @@ class SidTkPlayer:
         portrait_image = None
         portrait_paths = [
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "ezrad_portrait.png"),
-            os.path.expanduser("~/Library/Application Support/SIDPlayer/ezrad_portrait.png"),
+            os.path.join(_app_data_dir(), "ezrad_portrait.png"),
             "ezrad_portrait.png",
         ]
         for path in portrait_paths:
@@ -3580,6 +3580,15 @@ def main():
     # proporzioni identiche a quelle tarate. Riscontrato su test reale.
 
     root = tk.Tk()
+    # Su Windows i font in punti vengono convertiti in pixel con 96 dpi
+    # (1pt = 1.333px), su macOS con 72 dpi (1pt = 1px). Il layout è tarato
+    # in pixel su macOS, quindi su Windows tutto il testo risultava più
+    # grande di un terzo (bottoni OUT/HELP/ABOUT larghi 64px invece di 48,
+    # finestra HELP altissima) mentre i widget a dimensione fissa restavano
+    # uguali. Con scaling 1.0 un font da 10pt è alto 10px su entrambe le
+    # piattaforme. Va impostato prima di creare qualsiasi font/finestra.
+    if IS_WINDOWS:
+        root.tk.call('tk', 'scaling', 1.0)
     app = SidTkPlayer(root, config=config)
     root.mainloop()
 
