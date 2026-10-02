@@ -2,7 +2,7 @@
 import os
 import sys
 
-APP_VERSION = '6.6'
+APP_VERSION = '6.7'
 _ICON = '../assets/commodore.ico' if sys.platform == 'win32' else '../assets/commodore.icns'
 
 _datas = [
