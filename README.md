@@ -42,6 +42,20 @@ e integrazione con Touch Bar e Control Center su macOS.
 
 ## Quick start
 
+### App pronta (Windows e macOS)
+
+Scarica l'ultima versione dalla pagina [Releases](https://github.com/ezradibiase/sid_player/releases/latest):
+
+- **Windows** — `SIDPlayer.exe`, doppio clic. `sidplayfp` è già incluso: nessuna installazione richiesta.
+- **macOS** — `SIDPlayer-macOS-vX.Y.zip`: decomprimi e trascina l'app in Applicazioni. È una build Intel
+  (su Apple Silicon gira tramite Rosetta) e non è notarizzata: al primo avvio usa tasto destro → **Apri**.
+  Richiede `sidplayfp` installato (`brew install sidplayfp` oppure `sudo port install sidplayfp`). Le app aperte
+  dal Finder hanno un `PATH` ridotto, quindi se non lo trova imposta il percorso completo in `sidplayer.cfg`
+  (`sidplay_cmd`, vedi [Configurazione](#configurazione)), per esempio `/opt/local/bin/sidplayfp` con MacPorts,
+  `/opt/homebrew/bin/sidplayfp` con Homebrew su Apple Silicon o `/usr/local/bin/sidplayfp` su Intel.
+
+### Da sorgente
+
 ```bash
 # 1. Il motore audio
 brew install sidplayfp                # macOS
@@ -58,14 +72,12 @@ python3 sidplayer.py
 
 Clicca **EJECT**, scegli un file `.sid` (o una playlist), premi **PLAY**. Fine.
 
-> ⚠️ SIDPlayer è **testato e supportato pienamente su macOS**. Il supporto per Linux e
-> Windows è in **beta** — il codice ha fallback per quelle piattaforme, ma non è mai stato
-> testato in profondità. Segnala problemi su [GitHub Issues](https://github.com/ezradibiase/sid_player/issues).
+> SIDPlayer è **sviluppato e testato su macOS e Windows**. Il supporto per **Linux** è ancora
+> in **beta**: il codice ha i fallback necessari, ma non è mai stato testato in profondità.
+> Segnala problemi su [GitHub Issues](https://github.com/ezradibiase/sid_player/issues).
 
-Su **Windows**: se usi l'eseguibile `SIDPlayer.exe` compilato dalla CI (workflow
-"Build Windows" su GitHub Actions), `sidplayfp` è già incluso — nessuna installazione
-richiesta. Se invece esegui da sorgente (`python sidplayer.py`), sidplayfp non è
-disponibile come pacchetto Windows standalone: va installato tramite
+Su **Windows**, eseguendo da sorgente (`python sidplayer.py`) invece di usare `SIDPlayer.exe`,
+`sidplayfp` non è disponibile come pacchetto Windows standalone: va installato tramite
 [MSYS2](https://www.msys2.org/) (shell **MSYS2 MinGW64**, non quella base) con
 `pacman -S mingw-w64-x86_64-sidplayfp`, poi imposta il percorso completo in
 `sidplayer.cfg` (vedi [Configurazione](#configurazione)) oppure aggiungi
@@ -73,23 +85,20 @@ disponibile come pacchetto Windows standalone: va installato tramite
 Su **macOS** puoi anche rendere eseguibile `launchers/start_sidplayer.command` e
 aprirlo dal Finder.
 
-Il font [C64 Pro Mono](https://github.com/mborgbrant/c64-pro-mono) è opzionale ma
+Il font [C64 Pro Mono](https://style64.org/c64-truetype) è opzionale ma
 consigliato: senza, viene usato Courier come fallback.
 
 ---
 
 ## Perché SIDPlayer
 
-Il SID (MOS 6581/8580) è il chip audio del Commodore 64, e la
-[High Voltage SID Collection](https://www.hvsc.c64.org/) ne conserva oltre 50.000 brani.
-Per ascoltarli esistono già ottimi strumenti — emulatori, player da riga di comando,
-servizi online come DeepSID.
-
-Questo è semplicemente il player che ho costruito per il mio uso personale: riproduce
-i `.sid` con `sidplayfp`, mostra la cover del gioco e i titoli dei subsong dal database
-STIL, si integra con i controlli multimediali di sistema, e ha la faccia del
-registratore a cassette con cui quei brani si caricavano nel 1985 — perché mi ci
-sono affezionato e volevo un player che gli somigliasse.
+Per ascoltare i file SID esistono già ottimi strumenti: emulatori, player da riga di
+comando, servizi online come DeepSID. Questo è semplicemente il player che ho costruito
+per il mio uso personale: riproduce i `.sid` con `sidplayfp`, mostra la cover del gioco
+e i titoli dei subsong dal database STIL, si integra con i controlli multimediali di
+sistema e ha la faccia del registratore a cassette con cui quei videogiochi si
+caricavano negli anni '80, perché mi ci sono affezionato e volevo un player che gli
+somigliasse.
 
 ---
 
@@ -100,6 +109,7 @@ sono affezionato e volevo un player che gli somigliasse.
 - Navigazione **subsong** (◄ / ►) con lettura del default song dall'header SID
 - Playlist personalizzate e in **formato standard HVSC** (anche liste "ranked" come le Top100)
 - **Shuffle** attivabile/disattivabile a runtime (bottone SHUF)
+- **Tutte le subsong in sequenza** con il bottone SUB (disattivato di default)
 - Controllo volume in tempo reale, mute, pausa/ripresa
 - Selezione del device di output audio, incluse casse Bluetooth
 
@@ -108,12 +118,11 @@ sono affezionato e volevo un player che gli somigliasse.
   metallico, decorazione AUTO STOP, contatore a nastro a 3 cifre animato
 - Cover del gioco da **IGDB** e **RAWG** (opzionale, con API key)
 - Titoli dei subsong dal database **STIL**
-- Boot screen easter egg in stile BASIC V2 all'avvio 😉
+- Schermata di boot in stile C64 BASIC V2 all'avvio, che resta finché non carichi un SID o una playlist
 
 **Integrazione macOS**
 - **Control Center**: titolo e artista nel widget musica
 - **Touch Bar**: play/pause, traccia precedente/successiva
-- **Tasti F-media** (F7/F8/F9) e **Siri**
 
 ---
 
@@ -155,6 +164,10 @@ hvsc_root =
 gb64_boxart_path =
 gb64_mdb_path =
 
+# Cartella con le foto dei musicisti GB64 (opzionale): mostra una piccola foto
+# accanto al nome dell'autore (vedi sezione "Copertine da GB64" più sotto).
+gb64_photos_path =
+
 # Percorso STIL.txt (lascia vuoto per ricerca automatica)
 stil_path =
 
@@ -175,7 +188,7 @@ shuffle = false
 
 [window]
 width = 640
-height = 580
+height = 600
 resizable = false
 ```
 
@@ -199,6 +212,12 @@ copertine, con lo stesso approccio di [DeepSID](https://deepsid.chordian.net/): 
 tramite il database del gioco, invece di indovinare dal nome file. Nessuna chiamata di rete
 quando la copertina è disponibile in locale, e niente più copertine sbagliate per giochi con
 nomi simili.
+
+Con la stessa collezione puoi mostrare anche la **foto del musicista** accanto al nome
+dell'autore: imposta `gb64_photos_path` sulla cartella delle foto, con i file nominati come
+l'autore e gli spazi sostituiti da underscore (per esempio `Rob_Hubbard`, con un'estensione
+immagine comune). Se l'header elenca più autori viene provato il primo. Se per quell'autore
+non c'è una foto, non viene mostrato nulla.
 
 **Cosa serve, in breve:**
 
@@ -320,9 +339,10 @@ la riproduzione:
 | Pulsante | Funzione |
 |----------|----------|
 | **OUT** | Seleziona il device di output audio |
-| **HELP** | Spiega le funzioni di EJECT, PLAY e RECORD |
+| **HELP** | Spiega le funzioni di EJECT, PLAY, RECORD, SHUF e SUB |
 | **ABOUT** | Informazioni sull'applicazione |
 | **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo, disattivato di default) |
+| **SUB** | Riproduce in sequenza tutte le subsong del brano corrente prima di passare al successivo (verde = attivo, disattivato di default) |
 | **VOL** | Slider volume (0–100%) |
 | **M** | Mute / unmute |
 
@@ -341,7 +361,7 @@ la riproduzione:
 | **STOP ■** | Ferma la riproduzione |
 | **EJECT ▲** | Carica file SID o una playlist (stessa scelta prima su LOAD) |
 
-Il pulsante **HELP** nella riga utility spiega RECORD/PLAY/EJECT direttamente nell'app.
+Il pulsante **HELP** nella riga utility spiega RECORD/PLAY/EJECT e i toggle SHUF/SUB direttamente nell'app.
 
 ### Navigazione subsong
 
@@ -358,14 +378,20 @@ ha più subsong, appare una riga con:
 Il subsong viene ricaricato istantaneamente senza perdere la posizione in playlist.
 La riga scompare quando si ferma la riproduzione o se il file ha un solo subsong.
 
-Per chiudere l'applicazione usa la **✕** del window manager (la finestra salva lo stato
-correttamente).
+Per chiudere l'applicazione usa la **✕** della finestra: ferma la riproduzione e libera
+i controlli multimediali di sistema.
 
 ### Selezione output audio
 
-Il pulsante **OUT** apre un popup con tutti i device audio disponibili nel sistema.
-Permette di separare l'audio del player dall'audio
-di sistema. Il device selezionato viene usato dalla traccia successiva in poi.
+Il pulsante **OUT** apre un popup con i device audio di uscita disponibili nel sistema.
+
+<img src="docs/output.webp" alt="Finestra Audio Output con l'elenco dei device: Default di sistema, Built-in Output, Microsoft Teams Audio, e i pulsanti OK e CANCEL" width="420">
+
+- **[Default di sistema]**, selezionato all'avvio, segue l'uscita scelta nelle impostazioni audio del sistema operativo.
+- Scegli un altro device e premi **OK** per mandare l'audio del player solo lì (cuffie, casse Bluetooth, ecc.),
+  separandolo dall'audio di sistema. **CANCEL** chiude senza cambiare nulla.
+- La scelta vale dalla traccia successiva: il brano in corso continua sul device di prima.
+- Non viene salvata: al riavvio si torna al default di sistema.
 
 ---
 
@@ -375,8 +401,6 @@ Su macOS, SIDPlayer si integra con i controlli multimediali del sistema operativ
 
 - **Control Center** — mostra titolo e artista del brano in corso nel widget musica
 - **Touch Bar** — controlli play/pause, traccia precedente e successiva
-- **Tasti F-media** (F7 / F8 / F9) — controllano la riproduzione
-- **Siri** — può mettere in pausa o riprendere la riproduzione
 
 L'integrazione usa `MPNowPlayingInfoCenter` e `MPRemoteCommandCenter` del framework
 Apple **MediaPlayer**, accessibile tramite PyObjC (già incluso in macOS — nessuna
@@ -397,6 +421,9 @@ pyinstaller SIDPlayer.spec
 ```
 
 L'app viene creata in `scripts/dist/SIDPlayer.app`.
+
+Su **Windows** l'eseguibile `SIDPlayer.exe` (con `sidplayfp` incluso) viene compilato dalla CI di GitHub Actions
+(workflow "Build Windows") e pubblicato nelle [Releases](https://github.com/ezradibiase/sid_player/releases) a ogni tag `v*`.
 
 ---
 
@@ -475,11 +502,16 @@ python3 sidplayer.py -d
 
 STIL contiene titoli e note sui subsong dell'HVSC. Per usarlo:
 1. Scarica la HVSC da https://www.hvsc.c64.org/
-2. Imposta il percorso di `STIL.txt` in `sidplayer.cfg`, oppure mettilo in una delle
-   posizioni cercate automaticamente:
+2. Imposta il percorso di `STIL.txt` in `sidplayer.cfg` (`stil_path`), oppure lascia `stil_path`
+   vuoto e mettilo in una delle posizioni cercate automaticamente:
+   - `STIL.txt` nella cartella dell'app
    - `./STIL.txt`
    - `~/Music/HVSC/STIL.txt`
    - `~/HVSC/STIL.txt`
+   - `/usr/share/HVSC/STIL.txt`
+
+   La ricerca automatica parte solo se `stil_path` è vuoto: se contiene un percorso che non
+   esiste, i titoli STIL non vengono caricati.
 
 ---
 
@@ -488,7 +520,7 @@ STIL contiene titoli e note sui subsong dell'HVSC. Per usarlo:
 - [ ] **Drag & drop** di file e playlist sulla finestra ([#3](https://github.com/ezradibiase/sid_player/issues/3))
 - [ ] **Browser HVSC integrato** per esplorare la collezione dal player ([#4](https://github.com/ezradibiase/sid_player/issues/4))
 - [ ] **Finestra Preferenze** (⌘,) per configurare senza editare file ([#9](https://github.com/ezradibiase/sid_player/issues/9))
-- [ ] Test e supporto completo per **Linux e Windows** ([#7](https://github.com/ezradibiase/sid_player/issues/7))
+- [ ] Test e supporto completo per **Linux** ([#7](https://github.com/ezradibiase/sid_player/issues/7))
 
 La cronologia completa delle versioni è nel [CHANGELOG](CHANGELOG.md).
 
@@ -502,7 +534,7 @@ Issue e pull request sono benvenute — il flusso è quello classico:
 2. Crea un branch (`feature/nome-feature` o `fix/nome-fix`)
 3. Apri una **PR** verso `main`
 
-Se usi SIDPlayer su **Linux o Windows**, ogni segnalazione è preziosa:
+Se usi SIDPlayer su **Linux**, ogni segnalazione è preziosa:
 il supporto è in beta proprio perché mancano test sul campo.
 
 ---
@@ -516,7 +548,7 @@ il supporto è in beta proprio perché mancano test sul campo.
 | **Chip SID** | Bob Yannes, MOS Technology, 1982 |
 | **Collezione** | [HVSC — High Voltage SID Collection](https://www.hvsc.c64.org/) |
 | **Motore audio** | [sidplayfp](https://github.com/libsidplayfp/sidplayfp) |
-| **Font** | [C64 Pro Mono](https://github.com/mborgbrant/c64-pro-mono), [Michroma](https://fonts.google.com/specimen/Michroma) (badge trasporto) |
+| **Font** | [C64 Pro Mono](https://style64.org/c64-truetype), [Michroma](https://fonts.google.com/specimen/Michroma) (badge trasporto) |
 
 Altri link: [IGDB API](https://api-docs.igdb.com/) · [RAWG.io API](https://rawg.io/apidocs)
 
