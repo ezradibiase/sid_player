@@ -110,7 +110,7 @@ somigliasse.
 - Playlist personalizzate e in **formato standard HVSC** (anche liste "ranked" come le Top100)
 - **Shuffle** attivabile/disattivabile a runtime (bottone SHUF)
 - **Tutte le subsong in sequenza** con il bottone SUB (disattivato di default)
-- Controllo volume in tempo reale, mute, pausa/ripresa
+- Controllo volume in tempo reale, pausa/ripresa
 - Selezione del device di output audio, incluse casse Bluetooth
 
 **Estetica Datasette**
@@ -168,7 +168,8 @@ gb64_mdb_path =
 # accanto al nome dell'autore (vedi sezione "Copertine da GB64" più sotto).
 gb64_photos_path =
 
-# Percorso STIL.txt (lascia vuoto per ricerca automatica)
+# Percorso di STIL.txt. Se vuoto: <hvsc_root>/DOCUMENTS/STIL.txt, poi ricerca
+# automatica nelle posizioni comuni (vedi sezione STIL)
 stil_path =
 
 [api]
@@ -344,7 +345,6 @@ la riproduzione:
 | **SHUF** | Attiva/disattiva l'ordine casuale della playlist (verde = attivo, disattivato di default) |
 | **SUB** | Riproduce in sequenza tutte le subsong del brano corrente prima di passare al successivo (verde = attivo, disattivato di default) |
 | **VOL** | Slider volume (0–100%) |
-| **M** | Mute / unmute |
 
 <img src="docs/about.webp" alt="Schermata ABOUT con crediti in stile demoscene: code, music, SID chip, special thanks" width="420">
 
@@ -503,15 +503,16 @@ python3 sidplayer.py -d
 STIL contiene titoli e note sui subsong dell'HVSC. Per usarlo:
 1. Scarica la HVSC da https://www.hvsc.c64.org/
 2. Imposta il percorso di `STIL.txt` in `sidplayer.cfg` (`stil_path`), oppure lascia `stil_path`
-   vuoto e mettilo in una delle posizioni cercate automaticamente:
+   vuoto: viene cercato in questo ordine
+   - `<hvsc_root>/DOCUMENTS/STIL.txt`, se hai impostato `hvsc_root` (la posizione standard nella HVSC)
    - `STIL.txt` nella cartella dell'app
    - `./STIL.txt`
    - `~/Music/HVSC/STIL.txt`
    - `~/HVSC/STIL.txt`
    - `/usr/share/HVSC/STIL.txt`
 
-   La ricerca automatica parte solo se `stil_path` è vuoto: se contiene un percorso che non
-   esiste, i titoli STIL non vengono caricati.
+   Se `stil_path` contiene un percorso che non esiste, i titoli STIL non vengono caricati e la
+   ricerca automatica non parte.
 
 ---
 
