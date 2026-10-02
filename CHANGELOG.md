@@ -4,6 +4,45 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.6] — 2026-10-02
+
+Release di rifinitura dopo la v6.5, la prima con un eseguibile Windows: i test su un
+PC Windows reale hanno mostrato che tutto il testo risultava più grande di un terzo
+rispetto a macOS (bottoni OUT/HELP/ABOUT e finestre HELP/ABOUT/OUT sproporzionati), e
+il badge Commodore della barra trasporto andava rifatto in modo indipendente dai font
+installati. Chi usa Windows dovrebbe passare a questa versione; su macOS cambia
+soprattutto il badge.
+
+### Modifiche
+- **Badge Commodore della barra trasporto rifatto sulla foto del Datassette reale**: il
+  marchio "C" e la scritta "commodore" sono ora immagini pre-renderizzate
+  (`assets/commodore_mark.png`, `assets/commodore_wordmark.png`) invece di testo a
+  runtime, così non dipendono dai font installati sulla piattaforma. La scritta usa
+  [Michroma](https://fonts.google.com/specimen/Michroma) (licenza OFL), discendente
+  di Eurostile/Microgramma, i font del logo Commodore originale; è centrata sull'altezza
+  del "checkmark" del marchio.
+- **Strisce decorative disegnate su Canvas** con la progressione misurata sulla foto
+  (7 barre, larghezza crescente e gap decrescente da sinistra a destra; prima erano una
+  stringa di caratteri Unicode con la direzione invertita). Si scalano allo spazio
+  realmente disponibile e vengono ridisegnate dopo il restringimento della targhetta,
+  così non sforano più a destra.
+- Screenshot principale del README aggiornato con l'interfaccia attuale.
+
+### Fix
+- **Windows: testo più grande di un terzo rispetto a macOS.** Tk converte i font in
+  punti in pixel a 96 dpi su Windows (1pt = 1,33px) e a 72 dpi su macOS (1pt = 1px),
+  ma il layout è tarato in pixel su macOS. Ora lo scaling di Tk è portato a 1.0 su
+  Windows: bottoni OUT/HELP/ABOUT e finestre HELP, ABOUT e OUT tornano proporzionati
+  all'app. Nessun cambiamento su macOS.
+- **Windows: ritratto dell'autore assente nell'ABOUT.** Il file era personale e fuori
+  dal repository, quindi la build di GitHub Actions non lo includeva mai, e veniva
+  cercato solo in un percorso valido su macOS. Ora una versione ridotta (320px, 142 KB)
+  è in `assets/ezrad_portrait.png` e viene inclusa in tutte le build; resta possibile
+  sostituirla mettendo un file con lo stesso nome in `%APPDATA%\SIDPlayer\` (o nella
+  cartella equivalente su macOS/Linux).
+
+---
+
 ## [v6.5] — 2026-10-01
 
 ### Aggiunto

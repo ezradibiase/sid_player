@@ -1,8 +1,9 @@
 # Credenziali e configurazione utente
 sidplayer.cfg
 
-# Immagine autore (personale)
-ezrad_portrait.png
+# Originale ad alta risoluzione del ritratto (solo locale): la versione
+# ridotta usata dall'app è versionata in assets/
+/ezrad_portrait.png
 playlist.txt
 *playlist*
 igdb_credentials.txt

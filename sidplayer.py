@@ -131,7 +131,7 @@ except ImportError:
     HAS_SOUNDDEVICE = False
     log_message("ATTENZIONE: 'sounddevice' non installato - uso riproduzione diretta")
 
-VERSION = "v6.5"
+VERSION = "v6.6"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
 # "Courier" su Windows è il vecchio font bitmap di sistema (non scalabile): a
 # dimensioni diverse da quelle native viene ridimensionato in modo grezzo,
@@ -3358,13 +3358,15 @@ class SidTkPlayer:
 
         # Ritratto autore
         portrait_image = None
+        # Versione ridotta versionata in assets/ (bundlata nelle build);
+        # la cartella dati utente resta come alternativa per sostituirla.
         portrait_paths = [
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), "ezrad_portrait.png"),
+            _app_icon_path("ezrad_portrait.png"),
             os.path.join(_app_data_dir(), "ezrad_portrait.png"),
             "ezrad_portrait.png",
         ]
         for path in portrait_paths:
-            if os.path.exists(path):
+            if path and os.path.exists(path):
                 try:
                     img = Image.open(path).convert("RGBA")
                     img = img.resize((160, 160), Image.Resampling.LANCZOS)
