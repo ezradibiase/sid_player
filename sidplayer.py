@@ -131,7 +131,7 @@ except ImportError:
     HAS_SOUNDDEVICE = False
     log_message("ATTENZIONE: 'sounddevice' non installato - uso riproduzione diretta")
 
-VERSION = "v6.5"
+VERSION = "v6.6"
 FONT_FAMILY_DEFAULT = "C64 Pro Mono"
 # "Courier" su Windows è il vecchio font bitmap di sistema (non scalabile): a
 # dimensioni diverse da quelle native viene ridimensionato in modo grezzo,

@@ -2,7 +2,7 @@
 import os
 import sys
 
-APP_VERSION = '6.5'
+APP_VERSION = '6.6'
 _ICON = '../assets/commodore.ico' if sys.platform == 'win32' else '../assets/commodore.icns'
 
 # ezrad_portrait.png è personale e non versionato (.gitignore) — su un checkout
