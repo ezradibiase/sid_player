@@ -34,9 +34,12 @@ soprattutto il badge.
   ma il layout è tarato in pixel su macOS. Ora lo scaling di Tk è portato a 1.0 su
   Windows: bottoni OUT/HELP/ABOUT e finestre HELP, ABOUT e OUT tornano proporzionati
   all'app. Nessun cambiamento su macOS.
-- **Windows: ritratto dell'autore assente nell'ABOUT.** Il file veniva cercato in un
-  percorso valido solo su macOS; ora anche in `%APPDATA%\SIDPlayer\` (stessa cartella
-  di cfg e log).
+- **Windows: ritratto dell'autore assente nell'ABOUT.** Il file era personale e fuori
+  dal repository, quindi la build di GitHub Actions non lo includeva mai, e veniva
+  cercato solo in un percorso valido su macOS. Ora una versione ridotta (320px, 142 KB)
+  è in `assets/ezrad_portrait.png` e viene inclusa in tutte le build; resta possibile
+  sostituirla mettendo un file con lo stesso nome in `%APPDATA%\SIDPlayer\` (o nella
+  cartella equivalente su macOS/Linux).
 
 ---
 

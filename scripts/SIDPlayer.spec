@@ -5,9 +5,6 @@ import sys
 APP_VERSION = '6.6'
 _ICON = '../assets/commodore.ico' if sys.platform == 'win32' else '../assets/commodore.icns'
 
-# ezrad_portrait.png è personale e non versionato (.gitignore) — su un checkout
-# pulito (CI compresa) non esiste: va incluso solo se presente, altrimenti
-# PyInstaller fallisce l'Analysis per un data file mancante.
 _datas = [
     ('../stil_reader.py', '.'),
     ('../nowplaying_mac.py', '.'),
@@ -21,9 +18,9 @@ _datas = [
     # dipendere da un font installato sulla piattaforma di destinazione.
     ('../assets/commodore_mark.png', '.'),
     ('../assets/commodore_wordmark.png', '.'),
+    # ritratto dell'autore nell'ABOUT (versione ridotta, 320px)
+    ('../assets/ezrad_portrait.png', '.'),
 ]
-if os.path.exists('../ezrad_portrait.png'):
-    _datas.append(('../ezrad_portrait.png', '.'))
 
 # sidplayfp.exe + le sue DLL runtime: preparate dal workflow CI Windows (via
 # MSYS2, build-time soltanto) in scripts/vendor/sidplayfp-windows/, così
