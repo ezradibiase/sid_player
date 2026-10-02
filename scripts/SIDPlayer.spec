@@ -16,6 +16,11 @@ _datas = [
     # sidplayer.py può impostarla a runtime su Windows/Linux via _app_icon_path()
     ('../assets/commodore.ico', '.'),
     ('../assets/commodore.png', '.'),
+    # marchio + scritta "commodore" del badge trasporto (vedi
+    # _load_badge_logo_images in sidplayer.py), pre-renderizzati per non
+    # dipendere da un font installato sulla piattaforma di destinazione.
+    ('../assets/commodore_mark.png', '.'),
+    ('../assets/commodore_wordmark.png', '.'),
 ]
 if os.path.exists('../ezrad_portrait.png'):
     _datas.append(('../ezrad_portrait.png', '.'))

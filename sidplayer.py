@@ -1960,9 +1960,42 @@ class SidTkPlayer:
         badge_frame.pack(fill=tk.X, side=tk.TOP)
         badge_frame.pack_propagate(False)
 
-        tk.Label(badge_frame, text="C= commodore",
-                 fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=(self.font_family, 13, "bold")).pack(side=tk.LEFT, padx=(12, 0), anchor="s")
+        # Marchio "C" + scritta "commodore" come immagini pre-renderizzate
+        # (assets/commodore_mark.png, commodore_wordmark.png), non più
+        # testo a runtime: stesso colore di sempre (_badge_col), ma nessuna
+        # dipendenza da un font installato sulla piattaforma — lezione
+        # imparata con C64 Pro Mono su Windows, un font non garantito
+        # ovunque rompe silenziosamente le dimensioni/l'allineamento.
+        # Marchio quasi a tutta altezza del badge (47px) e scritta grande,
+        # centrata sull'altezza del "checkmark" (verificato su foto reale:
+        # la scritta non è ancorata in basso, il suo centro verticale sta
+        # un po' sopra la metà del marchio) — valori (0.82/0.62/0.46)
+        # verificati con composito di prova confrontato alla foto prima di
+        # essere riportati qui, non indovinati direttamente nel codice.
+        _mark_h = round(47 * 0.82)
+        _mark_photo, _word_photo = self._load_badge_logo_images(mark_height=_mark_h)
+        if _mark_photo:
+            _mark_w = _mark_photo.width()
+            _word_w = _word_photo.width()
+            _word_h = _word_photo.height()
+            logo_group = tk.Frame(badge_frame, width=_mark_w + 8 + _word_w, height=47,
+                                  bg=TRANSPORT["BG"])
+            logo_group.pack(side=tk.LEFT, padx=(12, 0))
+            logo_group.pack_propagate(False)
+
+            _mark_y = (47 - _mark_h) // 2
+            tk.Label(logo_group, image=_mark_photo, bg=TRANSPORT["BG"], bd=0,
+                     highlightthickness=0).place(x=0, y=_mark_y)
+            _word_y = _mark_y + round(_mark_h * 0.46) - _word_h // 2
+            tk.Label(logo_group, image=_word_photo, bg=TRANSPORT["BG"], bd=0,
+                     highlightthickness=0).place(x=_mark_w + 8, y=_word_y)
+        else:
+            # Fallback testuale se gli asset non si trovano (checkout
+            # anomalo senza assets/) — non dovrebbe succedere in pratica.
+            logo_group = tk.Label(badge_frame, text="C= commodore",
+                     fg=_badge_col, bg=TRANSPORT["BG"],
+                     font=(self.font_family, 13, "bold"))
+            logo_group.pack(side=tk.LEFT, padx=(12, 0), anchor="s")
 
         # Pannellino grigio con le barre nere. fill=Y invece di anchor="s":
         # il grigio riempie tutta l'altezza del badge, arrivando fino al
@@ -1973,16 +2006,69 @@ class SidTkPlayer:
         # quindi si usa una striscia da 2px al posto giusto invece che un
         # bordo completo — niente bordo a sinistra/sopra/sotto, che
         # toccherebbero rispettivamente il nero del badge e il pannello sotto.
+        _bars_gap_before = 30
         bars_panel = tk.Frame(badge_frame, bg=TRANSPORT["BG"])
-        bars_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(50, 0))
+        bars_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(_bars_gap_before, 0))
         tk.Frame(bars_panel, bg="#000000", width=2).pack(side=tk.RIGHT, fill=tk.Y)
 
-        # fg era nero (bars su pannello grigio chiaro): con lo sfondo ora
-        # scuro come il resto del badge, servono barre chiare per restare
-        # visibili — stesso colore del testo "C= commodore" accanto.
-        tk.Label(bars_panel, text="▉▊▋▌▍▎▏",
-                 fg=_badge_col, bg=TRANSPORT["BG"],
-                 font=(ACCENT_FONT, 34, "bold")).pack(expand=True, padx=(4, 2))
+        # Barre disegnate su Canvas con la progressione misurata pixel per
+        # pixel su una foto reale del Datassette (7 barre, larghezza
+        # crescente, gap decrescente da sinistra a destra). Prima erano
+        # un'unica stringa Unicode a glifi di larghezza variabile
+        # (▉▊▋▌▍▎▏) che andava nella direzione OPPOSTA (stretto→largo
+        # invece di largo→stretto) — mai verificata contro una foto reale,
+        # solo "a occhio". Il Canvas dà controllo diretto in pixel, nessuna
+        # ambiguità di rendering dei glifi.
+        #
+        # La larghezza "a grandezza naturale" (misurata dalla foto) può non
+        # starci: bar_plate è dimensionata dinamicamente sui tasti trasporto
+        # (font/piattaforma-dipendente, vedi sopra), quindi lo spazio
+        # residuo dopo logo_group varia. Si misura lo spazio REALE
+        # disponibile (non si stima) e si scala la progressione di
+        # conseguenza, mai oltre la grandezza naturale (scale<=1) per non
+        # "inventare" barre più grosse della foto originale.
+        # Fattore 0.62 (verificato su composito di prova confrontato alla
+        # foto): a grandezza naturale le barre erano troppo "grasse" e
+        # toglievano spazio visivo alla scritta — restano comunque più
+        # sottili di quanto starebbero a piena scala, e non più larghe.
+        _BADGE_BAR_THIN = 0.62
+        _BADGE_BAR_WIDTHS = tuple(w * _BADGE_BAR_THIN for w in (15, 22, 27, 31, 33, 37, 41))
+        _BADGE_BAR_GAPS = tuple(g * _BADGE_BAR_THIN for g in (29, 24, 20, 18, 12, 10))
+        _bars_natural_w = sum(_BADGE_BAR_WIDTHS) + sum(_BADGE_BAR_GAPS)
+        # Quasi tutta l'altezza del badge (47px), come nella foto originale
+        # (barre dal bordo alto al bordo basso della targhetta).
+        _bars_h = round(47 * 0.92)
+
+        # Disegna/ridisegna le barre scalate allo spazio REALMENTE
+        # disponibile in quel momento. Serve come funzione richiamabile:
+        # bar_plate può restringersi ulteriormente più sotto (loop anti-
+        # sovrapposizione legenda/counter) DOPO che le barre sono state
+        # create la prima volta — senza ridisegnarle alla fine con la
+        # larghezza finale, sforerebbero a destra con la vecchia larghezza
+        # (riscontrato: "le strisce sforano a destra").
+        def _redraw_badge_bars(plate_w):
+            self.master.update_idletasks()
+            available_w = (plate_w - logo_group.winfo_width()
+                           - 12 - _bars_gap_before - 2 - 6)
+            # Nessun floor: se lo spazio è poco, le barre si restringono
+            # di conseguenza — un minimo forzato causerebbe esattamente lo
+            # sforamento che si vuole evitare.
+            scale = max(0.0, min(1.0, available_w / _bars_natural_w))
+            bars_canvas.delete("all")
+            bars_canvas.config(width=max(1, int(_bars_natural_w * scale)))
+            _bx = 0.0
+            for _i, _bw in enumerate(_BADGE_BAR_WIDTHS):
+                _bw_s = _bw * scale
+                bars_canvas.create_rectangle(_bx, 0, _bx + _bw_s, _bars_h,
+                                             fill=_badge_col, width=0)
+                _bx += _bw_s
+                if _i < len(_BADGE_BAR_GAPS):
+                    _bx += _BADGE_BAR_GAPS[_i] * scale
+
+        bars_canvas = tk.Canvas(bars_panel, width=int(_bars_natural_w),
+                                height=_bars_h, bg=TRANSPORT["BG"], highlightthickness=0)
+        bars_canvas.pack(expand=True, padx=(4, 2))
+        _redraw_badge_bars(_bar_plate_w)
 
         # Striscia grigia con le etichette (parola+simbolo) — la targhetta
         # RECORD/PLAY/REWIND/... stampata sulla scocca, separata dai tasti
@@ -2121,6 +2207,11 @@ class SidTkPlayer:
                     f"legend_right={legend_row.winfo_rootx() + legend_row.winfo_width()} "
                     f"counter_left={counter_frame.winfo_rootx()} "
                     f"shrink_attempts_left={_shrink_attempts}")
+
+        # Ridisegna le barre del badge sulla larghezza FINALE di bar_plate
+        # (può essersi ristretta nel loop appena sopra) — altrimenti
+        # restano dimensionate sulla stima iniziale e sforano a destra.
+        _redraw_badge_bars(bar_plate.winfo_width())
 
         # RECORD disabilitato finché non ci sono tracce caricate (stesso
         # criterio di PLAY); EJECT parte abilitato, come LOAD prima di lui.
@@ -2519,6 +2610,36 @@ class SidTkPlayer:
     # ------------------------------------------------------------------
     # UI helpers
     # ------------------------------------------------------------------
+
+    def _load_badge_logo_images(self, mark_height):
+        """Carica il marchio "C" e la scritta "commodore" del badge
+        trasporto da assets/commodore_mark.png e commodore_wordmark.png
+        (pre-renderizzati, stesso colore _badge_col di sempre), scalandoli
+        in proporzione a mark_height. Ritorna (mark_photo, wordmark_photo);
+        (None, None) se gli asset non si trovano — il chiamante ricade sul
+        testo. I PhotoImage vivono su self._badge_*_photo: senza un
+        riferimento Python vivo, Tk li raccoglie e l'immagine sparisce."""
+        mark_path = _app_icon_path("commodore_mark.png")
+        word_path = _app_icon_path("commodore_wordmark.png")
+        if not mark_path or not word_path:
+            return None, None
+
+        mark_img = Image.open(mark_path)
+        mark_w = int(mark_img.width * mark_height / mark_img.height)
+        mark_img = mark_img.resize((mark_w, mark_height), Image.LANCZOS)
+
+        # Rapporto scritta/marchio (0.62) verificato su foto reale: la
+        # scritta "commodore" è quasi alta quanto il marchio stesso, non un
+        # dettaglio piccolo in basso — il posizionamento verticale (centrata
+        # sul checkmark) è gestito dal chiamante, non qui.
+        word_img = Image.open(word_path)
+        word_height = int(mark_height * 0.52)
+        word_w = int(word_img.width * word_height / word_img.height)
+        word_img = word_img.resize((word_w, word_height), Image.LANCZOS)
+
+        self._badge_mark_photo = ImageTk.PhotoImage(mark_img)
+        self._badge_wordmark_photo = ImageTk.PhotoImage(word_img)
+        return self._badge_mark_photo, self._badge_wordmark_photo
 
     def _apply_window_icon(self, window):
         """Su macOS l'icona arriva dal bundle .app (Info.plist), applicata
