@@ -4,6 +4,35 @@ Tutte le modifiche rilevanti al progetto sono documentate in questo file.
 
 ---
 
+## [v6.7] — 2026-10-02
+
+Release di manutenzione dopo la v6.6. Il motivo principale è che sui PC Windows la
+schermata ABOUT mostrava "STIL not available" e i titoli dei subsong non comparivano: il
+percorso predefinito di `STIL.txt` era un percorso personale fisso, e finché non esisteva
+quel file la ricerca automatica non partiva mai. In più sparisce un pulsante che non
+veniva mai disegnato, e il README è stato riscritto per allinearlo allo stato reale del
+progetto.
+
+### Modifiche
+- **`STIL.txt` cercato in `<hvsc_root>/DOCUMENTS/STIL.txt`**: `stil_path` ora è vuoto di
+  default. Se `hvsc_root` è impostato, il file viene preso dalla posizione standard della
+  HVSC; altrimenti parte la ricerca automatica nelle posizioni comuni. Un `stil_path`
+  esplicito vale come prima. Chi aveva già il vecchio default nel proprio cfg non cambia
+  comportamento.
+- **README aggiornato**: Windows non è più beta (resta beta solo Linux), Quick start dalle
+  Releases, documentati SUB, la selezione dell'output audio (con screenshot) e le foto dei
+  musicisti, screenshot di boot e ABOUT aggiornati, link al font C64 Pro Mono corretto.
+- **CI**: la build Windows ora parte su ogni pull request, anche quelle di sola
+  documentazione (serviva perché il check è obbligatorio per mergiare su `main`).
+
+### Fix
+- **Rimosso il pulsante M (mute)**: non veniva mai disegnato, perché lo slider del volume
+  occupava tutta la riga utility (già dalla v6.3). La pausa copre lo stesso bisogno.
+- **README**: tolte affermazioni non verificate o non vere (tasti F-media e Siri, "salva lo
+  stato" alla chiusura della finestra).
+
+---
+
 ## [v6.6] — 2026-10-02
 
 Release di rifinitura dopo la v6.5, la prima con un eseguibile Windows: i test su un
