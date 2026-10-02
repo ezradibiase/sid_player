@@ -230,7 +230,7 @@ class Config:
         'paths': {
             'images_dir': '~/Pictures/SIDPlayer',
             'playlist_file': '',  # Playlist caricata all'avvio (opzionale, vuota di default)
-            'stil_path': '~/Music/C64Music/STIL.txt',  # Percorso opzionale per STIL.txt
+            'stil_path': '',  # Percorso di STIL.txt (vuoto: <hvsc_root>/DOCUMENTS/STIL.txt, poi ricerca automatica)
             'hvsc_root': '',  # Root locale della collezione HVSC, per playlist con path HVSC-relativi
             'gb64_boxart_path': '',  # Cartella locale "Cover" di una collezione GB64 (opzionale)
             'gb64_mdb_path': '',  # Percorso al file GBC_vNN.mdb di GB64, per match preciso (richiede mdbtools)
@@ -312,9 +312,20 @@ class Config:
     @property
     def stil_path(self):
         path = self.get('paths', 'stil_path')
-        if not path:
-            return None
-        return os.path.expanduser(os.path.expandvars(path))
+        if path:
+            return os.path.expanduser(os.path.expandvars(path))
+        # Vuoto: nella struttura standard dell'HVSC il file sta in
+        # <radice>/DOCUMENTS/STIL.txt, quindi se hvsc_root è impostato lo si
+        # trova da lì. Altrimenti None: STILReader fa la ricerca automatica
+        # nelle posizioni comuni. Il default precedente (un percorso
+        # personale fisso) impediva la ricerca automatica a chi non aveva
+        # il file proprio lì.
+        hvsc = self.hvsc_root
+        if hvsc:
+            candidate = os.path.join(hvsc, 'DOCUMENTS', 'STIL.txt')
+            if os.path.exists(candidate):
+                return candidate
+        return None
 
     @property
     def hvsc_root(self):
@@ -1769,10 +1780,6 @@ class SidTkPlayer:
         util_frame = tk.Frame(self.canvas, bg=DATASETTE["PLASTIC"])
         util_frame.place(x=20, y=378, width=600, height=36)
 
-        # Muted state init
-        self._muted = False
-        self._pre_mute_volume = 70
-
         self.buttons = [None] * 9  # 7 funzionali + RECORD/EJECT, slot 7/8
 
         def _make_utility_btn(parent, text, command):
@@ -1865,17 +1872,6 @@ class SidTkPlayer:
             showvalue=True,
         )
         self.volume_slider.pack(side=tk.LEFT)
-
-        self.mute_btn = tk.Button(
-            util_frame, text="M",
-            command=self._toggle_mute,
-            font=(self.font_family, 9, "bold"),
-            fg=C64_PALETTE["BLACK"],
-            bg=C64_PALETTE["GREY"],
-            activebackground=C64_PALETTE["RED"],
-            relief="raised", bd=2, padx=4, pady=0,
-        )
-        self.mute_btn.pack(side=tk.LEFT, padx=(4, 0))
 
         # ---------------------------------------------------------------
         # Transport bar — badge Commodore in cima + tasti
@@ -2448,20 +2444,6 @@ class SidTkPlayer:
     def _on_volume_change(self, val):
         """Aggiorna il volume dell'engine in tempo reale."""
         self.audio_engine.volume = int(val) / 100.0
-
-    def _toggle_mute(self):
-        """Muta/riattiva l'audio senza perdere il volume precedente."""
-        if self._muted:
-            self._muted = False
-            self.volume_var.set(self._pre_mute_volume)
-            self.audio_engine.volume = self._pre_mute_volume / 100.0
-            self.mute_btn.config(bg=C64_PALETTE["GREY"], fg=C64_PALETTE["BLACK"])
-        else:
-            self._pre_mute_volume = self.volume_var.get()
-            self._muted = True
-            self.volume_var.set(0)
-            self.audio_engine.volume = 0.0
-            self.mute_btn.config(bg=C64_PALETTE["RED"], fg=C64_PALETTE["WHITE"])
 
     # Verde smorzato per i toggle SHUF/SUB attivi — più spento del verde
     # "LIGHT_GREEN" usato altrove, per restare leggibile come semplice
